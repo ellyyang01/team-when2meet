@@ -197,10 +197,31 @@ export default function Home() {
                     />
                   </div>
 
+                  // Get unique respondents for only this weekend's dates
+const weekendUsers = new Set<string>();
+
+allAvailabilities.forEach((item) => {
+  if (!item.slot_time || !item.user_name) return;
+  
+  const d = new Date(item.slot_time);
+  const isSat = d.getFullYear() === satDate.getFullYear() && 
+                d.getMonth() === satDate.getMonth() && 
+                d.getDate() === satDate.getDate();
+  const isSun = d.getFullYear() === sunDate.getFullYear() && 
+                d.getMonth() === sunDate.getMonth() && 
+                d.getDate() === sunDate.getDate();
+
+  if (isSat || isSun) {
+    weekendUsers.add(item.user_name.trim().toLowerCase());
+  }
+});
+
+const currentWeekendTotal = weekendUsers.size;
+
                   <div>
                     <div className="flex justify-between items-baseline mb-3">
                       <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
-                      <span className="text-xs text-slate-500">Respondents: {totalUsers}</span>
+                      <span className="text-xs text-slate-500">Respondents: {currentWeekendTotal}</span>Ï
                     </div>
 
                     <div className="border rounded bg-white p-2 text-xs">
