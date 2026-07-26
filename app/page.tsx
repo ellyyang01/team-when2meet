@@ -8,8 +8,8 @@ interface Session {
   id: string;
   label: string;
   dates: string[]; // ['2026-08-13', '2026-08-15']
-  start_hour: number; // e.g. 10 or 16
-  end_hour: number;   // e.g. 19 or 21
+  start_hour: number;
+  end_hour: number;
   display_order: number;
 }
 
@@ -43,12 +43,13 @@ export default function Home() {
   // Hover Inspector State
   const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
 
-  // Add Session Modal State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newLabel, setNewLabel] = useState('');
-  const [newDatesStr, setNewDatesStr] = useState(''); // e.g. "2026-08-13, 2026-08-15"
-  const [newStartHour, setNewStartHour] = useState(10);
-  const [newEndHour, setNewEndHour] = useState(19);
+  // Session Modal State (For Add & Edit)
+  const [showModal, setShowModal] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [modalLabel, setModalLabel] = useState('');
+  const [modalDates, setModalDates] = useState<string[]>(['']);
+  const [modalStartHour, setModalStartHour] = useState(10);
+  const [modalEndHour, setModalEndHour] = useState(19);
 
   const DEFAULT_POLL_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -108,7 +109,6 @@ export default function Home() {
     if (data && data.length > 0) {
       setSessions(data);
     } else {
-      // Default Fallback Sessions
       setSessions([
         {
           id: '1',
@@ -184,38 +184,89 @@ export default function Home() {
     await fetchAvailabilities();
   };
 
-  const handleCreateSession = async (e: React.FormEvent) => {
+  // Open Modal for Creating
+  const openAddModal = () => {
+    setEditingSessionId(null);
+    setModalLabel('');
+    setModalDates(['']);
+    setModalStartHour(10);
+    setModalEndHour(19);
+    setShowModal(true);
+  };
+
+  // Open Modal for Editing Title / Details
+  const openEditModal = (session: Session) => {
+    setEditingSessionId(session.id);
+    setModalLabel(session.label);
+    setModalDates(session.dates.length > 0 ? session.dates : ['']);
+    setModalStartHour(session.start_hour);
+    setModalEndHour(session.end_hour);
+    setShowModal(true);
+  };
+
+  // Date Picker Array Helpers
+  const handleDateChange = (index: number, val: string) => {
+    const updated = [...modalDates];
+    updated[index] = val;
+    setModalDates(updated);
+  };
+
+  const addDateField = () => {
+    setModalDates([...modalDates, '']);
+  };
+
+  const removeDateField = (index: number) => {
+    if (modalDates.length === 1) return;
+    setModalDates(modalDates.filter((_, i) => i !== index));
+  };
+
+  // Save Session (Create or Update)
+  const handleSaveSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLabel.trim() || !newDatesStr.trim()) {
-      alert('Please enter a session label and at least one date.');
+    const validDates = modalDates.filter((d) => d.trim() !== '');
+
+    if (!modalLabel.trim() || validDates.length === 0) {
+      alert('Please provide a session title and select at least one date.');
       return;
     }
 
-    const datesArray = newDatesStr
-      .split(',')
-      .map((d) => d.trim())
-      .filter((d) => d.length > 0);
+    if (editingSessionId) {
+      // Update existing
+      const { error } = await supabase
+        .from('session_config')
+        .update({
+          label: modalLabel.trim(),
+          dates: validDates,
+          start_hour: Number(modalStartHour),
+          end_hour: Number(modalEndHour),
+        })
+        .eq('id', editingSessionId);
 
-    const { error } = await supabase.from('session_config').insert([
-      {
-        poll_id: DEFAULT_POLL_ID,
-        label: newLabel.trim(),
-        dates: datesArray,
-        start_hour: Number(newStartHour),
-        end_hour: Number(newEndHour),
-        display_order: sessions.length + 1,
-        is_active: true,
-      },
-    ]);
+      if (error) {
+        alert(`Error updating session: ${error.message}`);
+        return;
+      }
+    } else {
+      // Create new
+      const { error } = await supabase.from('session_config').insert([
+        {
+          poll_id: DEFAULT_POLL_ID,
+          label: modalLabel.trim(),
+          dates: validDates,
+          start_hour: Number(modalStartHour),
+          end_hour: Number(modalEndHour),
+          display_order: sessions.length + 1,
+          is_active: true,
+        },
+      ]);
 
-    if (error) {
-      alert(`Error creating session: ${error.message}`);
-      return;
+      if (error) {
+        alert(`Error creating session: ${error.message}`);
+        return;
+      }
     }
 
-    setShowAddModal(false);
-    setNewLabel('');
-    setNewDatesStr('');
+    setShowModal(false);
     await fetchSessions();
   };
 
@@ -229,7 +280,7 @@ export default function Home() {
     const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
     const alreadySignedUp = snackSignups.some(
-      (s) => s.session_id === sessionId && s.date_str === dateStr && s.user_name.toLowerCase() === formattedName.toLowerCase()
+      (s) => (s.session_id === sessionId || (s as any).weekend_id === sessionId) && (s.date_str === dateStr || (s as any).day_of_week === dateStr) && s.user_name.toLowerCase() === formattedName.toLowerCase()
     );
 
     if (alreadySignedUp) {
@@ -241,7 +292,7 @@ export default function Home() {
       {
         poll_id: DEFAULT_POLL_ID,
         session_id: sessionId,
-        weekend_id: sessionId, // Backwards compatibility
+        weekend_id: sessionId,
         day_of_week: dateStr,
         date_str: dateStr,
         user_name: formattedName,
@@ -297,7 +348,7 @@ export default function Home() {
             </p>
           </div>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5"
           >
             <span>➕</span> Add Meeting Session
@@ -358,7 +409,6 @@ export default function Home() {
               const sessionDates = session.dates.map((dStr) => parseLocalDate(dStr));
               const timeSlots = generateTimeSlots(session.start_hour, session.end_hour);
 
-              // Unique respondents for THIS session
               const sessionRespondentSet = new Set<string>();
               allAvailabilities.forEach((item) => {
                 if (!item?.slot_time || !item?.user_name) return;
@@ -382,10 +432,18 @@ export default function Home() {
 
               return (
                 <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
-                  <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{session.label}</h2>
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
+                    <button
+                      onClick={() => openEditModal(session)}
+                      className="text-xs text-slate-500 hover:text-blue-600 font-medium flex items-center gap-1 border px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 transition"
+                    >
+                      <span>✏️</span> Edit Title & Dates
+                    </button>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Left: Schedule Selector per session day */}
+                    {/* Left: Schedule Selector */}
                     <div className="space-y-4">
                       <h3 className="text-sm font-semibold text-slate-600">Your Availability</h3>
                       {sessionDates.map((d, dIdx) => (
@@ -409,7 +467,7 @@ export default function Home() {
                       ))}
                     </div>
 
-                    {/* Right: Team Overlap Heatmap */}
+                    {/* Right: Heatmap Grid */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-baseline">
                         <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
@@ -418,7 +476,7 @@ export default function Home() {
                         </span>
                       </div>
 
-                      {/* HOVER INSPECTOR PANEL */}
+                      {/* HOVER INSPECTOR */}
                       {isCurrentHoveredSession && hoveredSlot ? (
                         <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
                           <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
@@ -462,7 +520,7 @@ export default function Home() {
                         </div>
                       )}
 
-                      {/* Dynamic Heatmap Table */}
+                      {/* Heatmap Table */}
                       <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHoveredSlot(null)}>
                         <div
                           className="grid text-center font-semibold text-slate-600 border-b pb-2 mb-1"
@@ -592,56 +650,77 @@ export default function Home() {
         )}
       </div>
 
-      {/* MODAL: ADD CUSTOM MEETING SESSION */}
-      {showAddModal && (
+      {/* MODAL: ADD / EDIT MEETING SESSION */}
+      {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-bold text-slate-800">Add New Meeting Session</h3>
+              <h3 className="text-lg font-bold text-slate-800">
+                {editingSessionId ? 'Edit Meeting Session' : 'Add New Meeting Session'}
+              </h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => setShowModal(false)}
                 className="text-slate-400 hover:text-slate-600 font-bold text-xl"
               >
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleCreateSession} className="space-y-4 text-sm">
+            <form onSubmit={handleSaveSession} className="space-y-4 text-sm">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Session Label / Title</label>
+                <label className="block font-semibold text-slate-700 mb-1">Session Title / Label</label>
                 <input
                   type="text"
                   placeholder="e.g. Week 5: Mid-season Code Sprint"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
+                  value={modalLabel}
+                  onChange={(e) => setModalLabel(e.target.value)}
                   className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Meeting Dates (Comma Separated YYYY-MM-DD)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 2026-08-13, 2026-08-15, 2026-08-16"
-                  value={newDatesStr}
-                  onChange={(e) => setNewDatesStr(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-                <span className="text-[11px] text-slate-500 mt-1 block">
-                  Supports 1, 2, or 3+ days (e.g. Thursday, Saturday, Sunday).
-                </span>
+              {/* CALENDAR DATE PICKERS */}
+              <div className="space-y-2">
+                <label className="block font-semibold text-slate-700">Meeting Dates (Calendar Picker)</label>
+
+                {modalDates.map((dVal, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <input
+                      type="date"
+                      value={dVal}
+                      onChange={(e) => handleDateChange(idx, e.target.value)}
+                      className="border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
+                      required
+                    />
+                    {modalDates.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeDateField(idx)}
+                        className="text-red-500 hover:text-red-700 font-bold px-2 py-1"
+                        title="Remove date"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addDateField}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold mt-1 inline-flex items-center gap-1"
+                >
+                  ➕ Add Another Date
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* TIME RANGE SELECTORS */}
+              <div className="grid grid-cols-2 gap-4 border-t pt-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Start Time (24h)</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Start Time</label>
                   <select
-                    value={newStartHour}
-                    onChange={(e) => setNewStartHour(Number(e.target.value))}
+                    value={modalStartHour}
+                    onChange={(e) => setModalStartHour(Number(e.target.value))}
                     className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
                   >
                     {Array.from({ length: 24 }).map((_, i) => (
@@ -653,10 +732,10 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">End Time (24h)</label>
+                  <label className="block font-semibold text-slate-700 mb-1">End Time</label>
                   <select
-                    value={newEndHour}
-                    onChange={(e) => setNewEndHour(Number(e.target.value))}
+                    value={modalEndHour}
+                    onChange={(e) => setModalEndHour(Number(e.target.value))}
                     className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
                   >
                     {Array.from({ length: 24 }).map((_, i) => (
@@ -671,7 +750,7 @@ export default function Home() {
               <div className="flex justify-end gap-3 border-t pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => setShowModal(false)}
                   className="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100 font-medium"
                 >
                   Cancel
@@ -680,7 +759,7 @@ export default function Home() {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
                 >
-                  Create Session
+                  {editingSessionId ? 'Save Changes' : 'Create Session'}
                 </button>
               </div>
             </form>
