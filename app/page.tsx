@@ -414,7 +414,7 @@ export default function Home() {
                           <ul className="flex flex-wrap gap-2">
                             {satSignups.map((s) => (
                               <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                <span>🍎 {s.user_name}</span>
+                                <span>😊 {s.user_name}</span>
                                 <button
                                   onClick={() => handleRemoveSnackSignup(s.id)}
                                   className="text-slate-400 hover:text-red-500 font-bold ml-1"
@@ -451,7 +451,7 @@ export default function Home() {
                           <ul className="flex flex-wrap gap-2">
                             {sunSignups.map((s) => (
                               <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                <span>🥪 {s.user_name}</span>
+                                <span>😋 {s.user_name}</span>
                                 <button
                                   onClick={() => handleRemoveSnackSignup(s.id)}
                                   className="text-slate-400 hover:text-red-500 font-bold ml-1"
