@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 
 export default function Home() {
+  const [userName, setUserName] = useState('');
   const [allAvailabilities, setAllAvailabilities] = useState<any[]>([]);
+  const [userSelectedSlots, setUserSelectedSlots] = useState<Set<string>>(new Set());
   const [slotUserMap, setSlotUserMap] = useState<Map<string, string[]>>(new Map());
 
-  // Define weekends to display (e.g., Weekend 1, Weekend 2)
+  // Define weekends to display
   const weekends = [
     {
       id: 1,
@@ -42,10 +44,40 @@ export default function Home() {
 
   const getSlotKey = (date: Date) => date.toISOString();
 
+  const toggleSlot = (slotKey: string) => {
+    if (!userName.trim()) {
+      alert('Please enter your name first before selecting availability!');
+      return;
+    }
+    const updated = new Set(userSelectedSlots);
+    if (updated.has(slotKey)) {
+      updated.delete(slotKey);
+    } else {
+      updated.add(slotKey);
+    }
+    setUserSelectedSlots(updated);
+  };
+
   return (
     <main className="p-6 max-w-6xl mx-auto space-y-8">
+      {/* Top Section: User Name Input */}
+      <div className="bg-white p-6 rounded-lg border shadow-sm max-w-md mx-auto">
+        <label htmlFor="user-name-input" className="block text-sm font-semibold text-slate-700 mb-2">
+          Your Name:
+        </label>
+        <input
+          id="user-name-input"
+          type="text"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          placeholder="Enter your name to sign availability..."
+          className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+
+      {/* Weekends List */}
       {weekends.map((weekend) => {
-        // Calculate respondents specifically for this weekend
+        // Filter respondents specifically for THIS weekend
         const weekendRespondents = allAvailabilities?.length > 0
           ? new Set(
               allAvailabilities
@@ -73,7 +105,7 @@ export default function Home() {
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Side: Personal Availability Form / Selector */}
+              {/* Left Side: Interactive Personal Selector */}
               <div>
                 <h3 className="text-sm font-semibold text-slate-600 mb-3">
                   Your Availability
@@ -81,19 +113,52 @@ export default function Home() {
                 <div className="border rounded bg-slate-50 p-3 text-xs">
                   <div className="grid grid-cols-3 text-center font-semibold text-slate-600 border-b pb-2 mb-2">
                     <div>Time</div>
-                    <div>{weekend.satDate.getMonth() + 1}/{weekend.satDate.getDate()}</div>
-                    <div>{weekend.sunDate.getMonth() + 1}/{weekend.sunDate.getDate()}</div>
+                    <div>{weekend.satDate.getMonth() + 1}/{weekend.satDate.getDate()} (Sat)</div>
+                    <div>{weekend.sunDate.getMonth() + 1}/{weekend.sunDate.getDate()} (Sun)</div>
                   </div>
                   <div className="space-y-1">
-                    {timeSlots.map((slot, i) => (
-                      <div key={i} className="grid grid-cols-3 gap-1 items-center h-6">
-                        <div className="text-slate-400 text-right pr-2 text-[10px]">
-                          {slot.label}
+                    {timeSlots.map((slot, i) => {
+                      const satSlotDate = new Date(
+                        weekend.satDate.getFullYear(),
+                        weekend.satDate.getMonth(),
+                        weekend.satDate.getDate(),
+                        slot.hour,
+                        slot.minute
+                      );
+                      const sunSlotDate = new Date(
+                        weekend.sunDate.getFullYear(),
+                        weekend.sunDate.getMonth(),
+                        weekend.sunDate.getDate(),
+                        slot.hour,
+                        slot.minute
+                      );
+
+                      const satKey = getSlotKey(satSlotDate);
+                      const sunKey = getSlotKey(sunSlotDate);
+
+                      const isSatSelected = userSelectedSlots.has(satKey);
+                      const isSunSelected = userSelectedSlots.has(sunKey);
+
+                      return (
+                        <div key={i} className="grid grid-cols-3 gap-1 items-center h-6">
+                          <div className="text-slate-400 text-right pr-2 text-[10px]">
+                            {slot.label}
+                          </div>
+                          <div
+                            onClick={() => toggleSlot(satKey)}
+                            className={`h-full rounded cursor-pointer transition-colors ${
+                              isSatSelected ? 'bg-emerald-500' : 'bg-slate-100 hover:bg-emerald-100'
+                            }`}
+                          />
+                          <div
+                            onClick={() => toggleSlot(sunKey)}
+                            className={`h-full rounded cursor-pointer transition-colors ${
+                              isSunSelected ? 'bg-emerald-500' : 'bg-slate-100 hover:bg-emerald-100'
+                            }`}
+                          />
                         </div>
-                        <div className="h-full rounded bg-slate-100 hover:bg-emerald-100 cursor-pointer transition-colors" />
-                        <div className="h-full rounded bg-slate-100 hover:bg-emerald-100 cursor-pointer transition-colors" />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
