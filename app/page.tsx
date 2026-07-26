@@ -78,7 +78,7 @@ export default function Home() {
       .from('availabilities')
       .select('*')
       .eq('poll_id', DEFAULT_POLL_ID);
-    
+
     if (data) setAllAvailabilities(data);
   };
 
@@ -118,8 +118,6 @@ export default function Home() {
     await fetchAvailabilities();
   };
 
-  const totalUsers = new Set(allAvailabilities.map((a) => a.user_name)).size;
-
   const slotUserMap = new Map<string, string[]>();
   allAvailabilities.forEach((item) => {
     const key = getSlotKey(item.slot_time);
@@ -134,7 +132,7 @@ export default function Home() {
   for (let h = 10; h < 19; h++) {
     const period = h >= 12 ? 'pm' : 'am';
     const displayHour = h > 12 ? h - 12 : h;
-    
+
     timeSlots.push({ hour: h, minute: 0, label: `${displayHour}:00${period}` });
     timeSlots.push({ hour: h, minute: 30, label: `${displayHour}:30${period}` });
   }
@@ -176,10 +174,31 @@ export default function Home() {
             const sunDate = new Date(satDate);
             sunDate.setDate(satDate.getDate() + 1);
 
+            // Calculate unique respondents specifically for THIS weekend
+            const weekendRespondents = allAvailabilities?.length > 0
+              ? new Set(
+                  allAvailabilities
+                    .filter((item) => {
+                      if (!item?.slot_time || !item?.user_name) return false;
+                      const d = new Date(item.slot_time);
+                      const isSat =
+                        d.getFullYear() === satDate.getFullYear() &&
+                        d.getMonth() === satDate.getMonth() &&
+                        d.getDate() === satDate.getDate();
+                      const isSun =
+                        d.getFullYear() === sunDate.getFullYear() &&
+                        d.getMonth() === sunDate.getMonth() &&
+                        d.getDate() === sunDate.getDate();
+                      return isSat || isSun;
+                    })
+                    .map((item) => item.user_name.trim().toLowerCase())
+                ).size
+              : 0;
+
             return (
               <div key={weekend.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
                 <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{weekend.label}</h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
@@ -200,7 +219,7 @@ export default function Home() {
                   <div>
                     <div className="flex justify-between items-baseline mb-3">
                       <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
-                      <span className="text-xs text-slate-500">Respondents: {totalUsers}</span>
+                      <span className="text-xs text-slate-500">Respondents: {weekendRespondents}</span>
                     </div>
 
                     <div className="border rounded bg-white p-2 text-xs">
@@ -218,15 +237,15 @@ export default function Home() {
                           const satUsers = slotUserMap.get(getSlotKey(satSlotDate)) || [];
                           const sunUsers = slotUserMap.get(getSlotKey(sunSlotDate)) || [];
 
-                          const satOpacity = totalUsers > 0 ? satUsers.length / totalUsers : 0;
-                          const sunOpacity = totalUsers > 0 ? sunUsers.length / totalUsers : 0;
+                          const satOpacity = weekendRespondents > 0 ? satUsers.length / weekendRespondents : 0;
+                          const sunOpacity = weekendRespondents > 0 ? sunUsers.length / weekendRespondents : 0;
 
                           return (
                             <div key={i} className="grid grid-cols-3 gap-1 items-center h-6">
                               <div className="text-slate-400 text-right pr-2 text-[10px]">{slot.label}</div>
-                              
+
                               <div
-                                title={satUsers.length > 0 ? `${satUsers.length}/${totalUsers} free:${satUsers.join(', ')}` : '0 available'}
+                                title={satUsers.length > 0 ? `${satUsers.length}/${weekendRespondents} free: ${satUsers.join(', ')}` : '0 available'}
                                 style={{
                                   backgroundColor: satUsers.length > 0 ? `rgba(34, 197, 94, ${Math.max(satOpacity, 0.3)})` : '#f1f5f9',
                                 }}
@@ -236,7 +255,7 @@ export default function Home() {
                               </div>
 
                               <div
-                                title={sunUsers.length > 0 ? `${sunUsers.length}/${totalUsers} free:${sunUsers.join(', ')}` : '0 available'}
+                                title={sunUsers.length > 0 ? `${sunUsers.length}/${weekendRespondents} free: ${sunUsers.join(', ')}` : '0 available'}
                                 style={{
                                   backgroundColor: sunUsers.length > 0 ? `rgba(34, 197, 94, ${Math.max(sunOpacity, 0.3)})` : '#f1f5f9',
                                 }}
