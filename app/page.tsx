@@ -88,15 +88,18 @@ export default function Home() {
       return;
     }
 
+    const raw = userName.trim();
+    const formattedName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+
     await supabase
       .from('availabilities')
       .delete()
       .eq('poll_id', DEFAULT_POLL_ID)
-      .eq('user_name', userName.trim());
+      .ilike('user_name', formattedName);
 
     const rowsToInsert = selectedSlots.map((slot) => ({
       poll_id: DEFAULT_POLL_ID,
-      user_name: userName.trim(),
+      user_name: formattedName,
       slot_time: slot.toISOString(),
     }));
 
