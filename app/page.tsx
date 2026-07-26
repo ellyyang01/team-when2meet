@@ -43,7 +43,7 @@ export default function Home() {
   // Hover Inspector State
   const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
 
-  // Modal State for Adding & Editing Sessions
+  // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [modalLabel, setModalLabel] = useState('');
@@ -109,7 +109,6 @@ export default function Home() {
     if (data && data.length > 0) {
       setSessions(data);
     } else {
-      // Fallback defaults
       setSessions([
         {
           id: '1',
@@ -183,6 +182,32 @@ export default function Home() {
 
     setIsSubmitted(true);
     await fetchAvailabilities();
+  };
+
+  // Reorder Sessions (Move Up / Down)
+  const handleMoveSession = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sessions.length) return;
+
+    const updated = [...sessions];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+
+    // Update display_order in state and Supabase
+    const updates = updated.map((s, idx) => ({
+      id: s.id,
+      display_order: idx + 1,
+    }));
+
+    setSessions(updated);
+
+    for (const item of updates) {
+      await supabase
+        .from('session_config')
+        .update({ display_order: item.display_order })
+        .eq('id', item.id);
+    }
   };
 
   const openAddModal = () => {
@@ -403,8 +428,10 @@ export default function Home() {
         {/* TAB 1: AVAILABILITY GRID */}
         {activeTab === 'availability' && (
           <div className="space-y-8">
-            {sessions.map((session) => {
+            {sessions.map((session, sessionIdx) => {
               const sessionDates = session.dates.map((dStr) => parseLocalDate(dStr));
+              const firstDate = sessionDates[0] || new Date();
+              const numDays = sessionDates.length;
               const timeSlots = generateTimeSlots(session.start_hour, session.end_hour);
 
               const sessionRespondentSet = new Set<string>();
@@ -432,37 +459,50 @@ export default function Home() {
                 <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
                   <div className="flex justify-between items-center border-b pb-2">
                     <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
-                    <button
-                      onClick={() => openEditModal(session)}
-                      className="text-xs text-slate-500 hover:text-blue-600 font-medium flex items-center gap-1 border px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 transition"
-                    >
-                      <span>✏️</span> Edit Title & Dates
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* MOVE UP / MOVE DOWN BUTTONS */}
+                      <button
+                        disabled={sessionIdx === 0}
+                        onClick={() => handleMoveSession(sessionIdx, 'up')}
+                        className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 text-slate-600"
+                        title="Move Up"
+                      >
+                        ⬆️ Up
+                      </button>
+                      <button
+                        disabled={sessionIdx === sessions.length - 1}
+                        onClick={() => handleMoveSession(sessionIdx, 'down')}
+                        className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 text-slate-600"
+                        title="Move Down"
+                      >
+                        ⬇️ Down
+                      </button>
+                      <button
+                        onClick={() => openEditModal(session)}
+                        className="text-xs text-slate-600 hover:text-blue-600 font-medium border px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 transition"
+                      >
+                        ✏️ Edit Title & Dates
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Left: Schedule Selector */}
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-slate-600">Your Availability</h3>
-                      {sessionDates.map((d, dIdx) => (
-                        <div key={dIdx} className="border p-3 rounded-lg bg-slate-50 space-y-2">
-                          <span className="text-xs font-bold text-slate-700 block">
-                            {formatDateShort(d)}
-                          </span>
-                          <ScheduleSelector
-                            startDate={d}
-                            numDays={1}
-                            minTime={session.start_hour}
-                            maxTime={session.end_hour}
-                            hourlyChunks={2}
-                            timeFormat="h:mm a"
-                            selection={selectedSlots}
-                            onChange={setSelectedSlots}
-                            selectedColor="#22c55e"
-                            unselectedColor="#ffffff"
-                          />
-                        </div>
-                      ))}
+                    {/* Left: Schedule Selector (HORIZONTAL GRID for 1, 2, or 3+ days) */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
+                      <ScheduleSelector
+                        startDate={firstDate}
+                        numDays={numDays}
+                        minTime={session.start_hour}
+                        maxTime={session.end_hour}
+                        hourlyChunks={2}
+                        timeFormat="h:mm a"
+                        dateFormat="M/D"
+                        selection={selectedSlots}
+                        onChange={setSelectedSlots}
+                        selectedColor="#22c55e"
+                        unselectedColor="#f1f5f9"
+                      />
                     </div>
 
                     {/* Right: Heatmap Grid */}
