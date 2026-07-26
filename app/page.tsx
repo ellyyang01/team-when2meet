@@ -189,11 +189,9 @@ export default function Home() {
     await fetchAvailabilities();
   };
 
-  // Toggle Active / Inactive Status for a Session
   const handleToggleActive = async (session: Session) => {
     const newStatus = !session.is_active;
 
-    // Optimistic UI update
     setSessions((prev) =>
       prev.map((s) => (s.id === session.id ? { ...s, is_active: newStatus } : s))
     );
@@ -205,11 +203,10 @@ export default function Home() {
 
     if (error) {
       alert(`Error updating session status: ${error.message}`);
-      await fetchSessions(); // Revert on failure
+      await fetchSessions();
     }
   };
 
-  // Move Session Order
   const handleMoveSession = async (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= filteredSessions.length) return;
@@ -217,7 +214,6 @@ export default function Home() {
     const currentSession = filteredSessions[index];
     const targetSession = filteredSessions[targetIndex];
 
-    // Swap display_order values
     const { error: err1 } = await supabase
       .from('session_config')
       .update({ display_order: targetSession.display_order })
@@ -259,7 +255,24 @@ export default function Home() {
     setModalDates(updated);
   };
 
+  // SMART DATE AUTO-FILL: Default newly added field to (last date + 1 day)
   const addDateField = () => {
+    if (modalDates.length > 0) {
+      const lastDateVal = modalDates[modalDates.length - 1];
+      if (lastDateVal && lastDateVal.trim() !== '') {
+        const [year, month, day] = lastDateVal.split('-').map(Number);
+        const nextDate = new Date(year, month - 1, day + 1);
+
+        const nextYear = nextDate.getFullYear();
+        const nextMonth = String(nextDate.getMonth() + 1).padStart(2, '0');
+        const nextDay = String(nextDate.getDate()).padStart(2, '0');
+
+        const nextDateStr = `${nextYear}-${nextMonth}-${nextDay}`;
+        setModalDates([...modalDates, nextDateStr]);
+        return;
+      }
+    }
+
     setModalDates([...modalDates, '']);
   };
 
@@ -364,11 +377,10 @@ export default function Home() {
     await fetchSnackSignups();
   };
 
-  // Filter Sessions based on Active/Inactive Switcher
   const filteredSessions = sessions.filter((session) => {
     if (statusFilter === 'active') return session.is_active;
     if (statusFilter === 'inactive') return !session.is_active;
-    return true; // 'all'
+    return true;
   });
 
   const slotUserMap = new Map<string, string[]>();
@@ -410,7 +422,7 @@ export default function Home() {
           </button>
         </header>
 
-        {/* Tab Switcher & Active/Inactive Status Filter Bar */}
+        {/* Tab Switcher & Active/Inactive Filter Bar */}
         <div className="flex flex-wrap justify-between items-center border-b border-slate-200 gap-4">
           <div className="flex">
             <button
@@ -435,7 +447,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* ACTIVE / INACTIVE FILTER TOGGLE */}
           <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-lg text-xs font-medium">
             <button
               onClick={() => setStatusFilter('active')}
@@ -539,7 +550,6 @@ export default function Home() {
                       <div className="flex items-center gap-3">
                         <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
 
-                        {/* ACTIVE / INACTIVE TOGGLE BADGE */}
                         <button
                           onClick={() => handleToggleActive(session)}
                           className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border transition ${
@@ -554,7 +564,6 @@ export default function Home() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* MOVE UP / MOVE DOWN BUTTONS */}
                         <button
                           disabled={sessionIdx === 0}
                           onClick={() => handleMoveSession(sessionIdx, 'up')}
