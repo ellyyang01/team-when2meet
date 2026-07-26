@@ -201,28 +201,27 @@ export default function Home() {
   <div className="flex justify-between items-baseline mb-3">
     <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
     <span className="text-xs text-slate-500">
-      Respondents: {
-        (() => {
-          const weekendUsers = new Set<string>();
-          allAvailabilities.forEach((item) => {
-            if (!item.slot_time || !item.user_name) return;
+  Respondents:{' '}
+  {allAvailabilities.length > 0
+    ? new Set(
+        allAvailabilities
+          .filter((item) => {
+            if (!item.slot_time || !item.user_name) return false;
             const d = new Date(item.slot_time);
             const isSat =
-            d.getFullYear() === satDate.getFullYear() &&
-            d.getMonth() === satDate.getMonth() &&
-            d.getDate() === satDate.getDate();
+              d.getFullYear() === satDate.getFullYear() &&
+              d.getMonth() === satDate.getMonth() &&
+              d.getDate() === satDate.getDate();
             const isSun =
               d.getFullYear() === sunDate.getFullYear() &&
               d.getMonth() === sunDate.getMonth() &&
               d.getDate() === sunDate.getDate();
-            if (isSat || isSun) {
-              weekendUsers.add(item.user_name.trim().toLowerCase());
-            }
-          });
-          return weekendUsers.size;
-        })()
-      }
-    </span>
+            return isSat || isSun;
+          })
+          .map((item) => item.user_name.trim().toLowerCase())
+      ).size
+    : 0}
+</span>
 
                     <div className="border rounded bg-white p-2 text-xs">
                       <div className="grid grid-cols-3 text-center font-semibold text-slate-600 border-b pb-2 mb-1">
