@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 interface Session {
   id: string;
   label: string;
-  dates: string[]; // ['2026-08-13', '2026-08-15']
+  dates: string[]; // e.g. ['2026-08-15', '2026-08-16']
   start_hour: number;
   end_hour: number;
   display_order: number;
@@ -43,7 +43,7 @@ export default function Home() {
   // Hover Inspector State
   const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
 
-  // Session Modal State (For Add & Edit)
+  // Modal State for Adding & Editing Sessions
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [modalLabel, setModalLabel] = useState('');
@@ -109,6 +109,7 @@ export default function Home() {
     if (data && data.length > 0) {
       setSessions(data);
     } else {
+      // Fallback defaults
       setSessions([
         {
           id: '1',
@@ -184,7 +185,6 @@ export default function Home() {
     await fetchAvailabilities();
   };
 
-  // Open Modal for Creating
   const openAddModal = () => {
     setEditingSessionId(null);
     setModalLabel('');
@@ -194,7 +194,6 @@ export default function Home() {
     setShowModal(true);
   };
 
-  // Open Modal for Editing Title / Details
   const openEditModal = (session: Session) => {
     setEditingSessionId(session.id);
     setModalLabel(session.label);
@@ -204,7 +203,6 @@ export default function Home() {
     setShowModal(true);
   };
 
-  // Date Picker Array Helpers
   const handleDateChange = (index: number, val: string) => {
     const updated = [...modalDates];
     updated[index] = val;
@@ -220,7 +218,6 @@ export default function Home() {
     setModalDates(modalDates.filter((_, i) => i !== index));
   };
 
-  // Save Session (Create or Update)
   const handleSaveSession = async (e: React.FormEvent) => {
     e.preventDefault();
     const validDates = modalDates.filter((d) => d.trim() !== '');
@@ -231,7 +228,6 @@ export default function Home() {
     }
 
     if (editingSessionId) {
-      // Update existing
       const { error } = await supabase
         .from('session_config')
         .update({
@@ -247,7 +243,6 @@ export default function Home() {
         return;
       }
     } else {
-      // Create new
       const { error } = await supabase.from('session_config').insert([
         {
           poll_id: DEFAULT_POLL_ID,
@@ -280,7 +275,10 @@ export default function Home() {
     const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
     const alreadySignedUp = snackSignups.some(
-      (s) => (s.session_id === sessionId || (s as any).weekend_id === sessionId) && (s.date_str === dateStr || (s as any).day_of_week === dateStr) && s.user_name.toLowerCase() === formattedName.toLowerCase()
+      (s) =>
+        (s.session_id === sessionId || (s as any).weekend_id === sessionId) &&
+        (s.date_str === dateStr || (s as any).day_of_week === dateStr) &&
+        s.user_name.toLowerCase() === formattedName.toLowerCase()
     );
 
     if (alreadySignedUp) {
@@ -476,7 +474,7 @@ export default function Home() {
                         </span>
                       </div>
 
-                      {/* HOVER INSPECTOR */}
+                      {/* HOVER INSPECTOR PANEL */}
                       {isCurrentHoveredSession && hoveredSlot ? (
                         <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
                           <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
@@ -602,7 +600,9 @@ export default function Home() {
                   {session.dates.map((dateStr, idx) => {
                     const d = parseLocalDate(dateStr);
                     const daySignups = snackSignups.filter(
-                      (s) => (s.session_id === session.id || (s as any).weekend_id === session.id) && (s.date_str === dateStr || (s as any).day_of_week === dateStr)
+                      (s) =>
+                        (s.session_id === session.id || (s as any).weekend_id === session.id) &&
+                        (s.date_str === dateStr || (s as any).day_of_week === dateStr)
                     );
 
                     return (
