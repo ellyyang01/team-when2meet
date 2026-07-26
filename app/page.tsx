@@ -4,22 +4,24 @@ import React, { useState, useEffect } from 'react';
 import ScheduleSelector from 'react-schedule-selector';
 import { supabase } from '@/lib/supabase';
 
-interface Weekend {
+interface Session {
   id: string;
   label: string;
-  start_date: string;
+  dates: string[]; // ['2026-08-13', '2026-08-15']
+  start_hour: number; // e.g. 10 or 16
+  end_hour: number;   // e.g. 19 or 21
   display_order: number;
 }
 
 interface SnackSignup {
   id: string;
-  weekend_id: string;
-  day_of_week: 'sat' | 'sun';
+  session_id: string;
+  date_str: string;
   user_name: string;
 }
 
 interface HoveredSlotInfo {
-  weekendId: string;
+  sessionId: string;
   dayLabel: string;
   timeLabel: string;
   available: string[];
@@ -31,7 +33,7 @@ export default function Home() {
   const [userName, setUserName] = useState('');
   const [selectedSlots, setSelectedSlots] = useState<Date[]>([]);
   const [allAvailabilities, setAllAvailabilities] = useState<any[]>([]);
-  const [weekends, setWeekends] = useState<Weekend[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Snack Sign-up States
@@ -40,6 +42,13 @@ export default function Home() {
 
   // Hover Inspector State
   const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
+
+  // Add Session Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [newDatesStr, setNewDatesStr] = useState(''); // e.g. "2026-08-13, 2026-08-15"
+  const [newStartHour, setNewStartHour] = useState(10);
+  const [newEndHour, setNewEndHour] = useState(19);
 
   const DEFAULT_POLL_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -58,8 +67,13 @@ export default function Home() {
     return new Date(year, month - 1, day, 0, 0, 0);
   };
 
+  const formatDateShort = (d: Date) => {
+    const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${d.getMonth() + 1}/${d.getDate()} (${dayName})`;
+  };
+
   useEffect(() => {
-    fetchWeekends();
+    fetchSessions();
     fetchAvailabilities();
     fetchSnackSignups();
   }, []);
@@ -84,21 +98,34 @@ export default function Home() {
     setIsSubmitted(false);
   };
 
-  const fetchWeekends = async () => {
+  const fetchSessions = async () => {
     const { data } = await supabase
-      .from('weekend_config')
+      .from('session_config')
       .select('*')
       .eq('is_active', true)
       .order('display_order', { ascending: true });
 
     if (data && data.length > 0) {
-      setWeekends(data);
+      setSessions(data);
     } else {
-      setWeekends([
-        { id: '1', label: 'Weekend 1: Aug 15 - Aug 16', start_date: '2026-08-15T00:00:00', display_order: 1 },
-        { id: '2', label: 'Weekend 2: Aug 22 - Aug 23', start_date: '2026-08-22T00:00:00', display_order: 2 },
-        { id: '3', label: 'Weekend 3: Aug 29 - Aug 30', start_date: '2026-08-29T00:00:00', display_order: 3 },
-        { id: '4', label: 'Weekend 4: Sep 5 - Sep 6',   start_date: '2026-09-05T00:00:00', display_order: 4 },
+      // Default Fallback Sessions
+      setSessions([
+        {
+          id: '1',
+          label: 'Week 1: Aug 15 - Aug 16',
+          dates: ['2026-08-15', '2026-08-16'],
+          start_hour: 10,
+          end_hour: 19,
+          display_order: 1,
+        },
+        {
+          id: '2',
+          label: 'Week 2: Aug 22 - Aug 23',
+          dates: ['2026-08-22', '2026-08-23'],
+          start_hour: 10,
+          end_hour: 19,
+          display_order: 2,
+        },
       ]);
     }
   };
@@ -157,7 +184,42 @@ export default function Home() {
     await fetchAvailabilities();
   };
 
-  const handleAddSnackSignup = async (weekendId: string, dayOfWeek: 'sat' | 'sun') => {
+  const handleCreateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLabel.trim() || !newDatesStr.trim()) {
+      alert('Please enter a session label and at least one date.');
+      return;
+    }
+
+    const datesArray = newDatesStr
+      .split(',')
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
+
+    const { error } = await supabase.from('session_config').insert([
+      {
+        poll_id: DEFAULT_POLL_ID,
+        label: newLabel.trim(),
+        dates: datesArray,
+        start_hour: Number(newStartHour),
+        end_hour: Number(newEndHour),
+        display_order: sessions.length + 1,
+        is_active: true,
+      },
+    ]);
+
+    if (error) {
+      alert(`Error creating session: ${error.message}`);
+      return;
+    }
+
+    setShowAddModal(false);
+    setNewLabel('');
+    setNewDatesStr('');
+    await fetchSessions();
+  };
+
+  const handleAddSnackSignup = async (sessionId: string, dateStr: string) => {
     const name = snackNameInput.trim();
     if (!name) {
       alert('Please enter your name first.');
@@ -167,19 +229,21 @@ export default function Home() {
     const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
     const alreadySignedUp = snackSignups.some(
-      (s) => s.weekend_id === weekendId && s.day_of_week === dayOfWeek && s.user_name.toLowerCase() === formattedName.toLowerCase()
+      (s) => s.session_id === sessionId && s.date_str === dateStr && s.user_name.toLowerCase() === formattedName.toLowerCase()
     );
 
     if (alreadySignedUp) {
-      alert(`${formattedName} is already signed up for snacks on this day!`);
+      alert(`${formattedName} is already signed up for snacks on this date!`);
       return;
     }
 
     const { error } = await supabase.from('snack_signups').insert([
       {
         poll_id: DEFAULT_POLL_ID,
-        weekend_id: weekendId,
-        day_of_week: dayOfWeek,
+        session_id: sessionId,
+        weekend_id: sessionId, // Backwards compatibility
+        day_of_week: dateStr,
+        date_str: dateStr,
         user_name: formattedName,
       },
     ]);
@@ -210,23 +274,34 @@ export default function Home() {
     }
   });
 
-  const timeSlots: { hour: number; minute: number; label: string }[] = [];
-  for (let h = 10; h < 19; h++) {
-    const period = h >= 12 ? 'pm' : 'am';
-    const displayHour = h > 12 ? h - 12 : h;
+  const generateTimeSlots = (startH: number, endH: number) => {
+    const slots: { hour: number; minute: number; label: string }[] = [];
+    for (let h = startH; h < endH; h++) {
+      const period = h >= 12 ? 'pm' : 'am';
+      const displayHour = h > 12 ? h - 12 : h === 0 ? 12 : h;
 
-    timeSlots.push({ hour: h, minute: 0, label: `${displayHour}:00${period}` });
-    timeSlots.push({ hour: h, minute: 30, label: `${displayHour}:30${period}` });
-  }
+      slots.push({ hour: h, minute: 0, label: `${displayHour}:00${period}` });
+      slots.push({ hour: h, minute: 30, label: `${displayHour}:30${period}` });
+    }
+    return slots;
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
-        <header className="border-b pb-4">
-          <h1 className="text-3xl font-bold text-slate-800">Team Planner</h1>
-          <p className="text-slate-600">
-            Coordinate team availability and snack sign-ups across weekend sessions.
-          </p>
+        <header className="border-b pb-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Team Planner</h1>
+            <p className="text-slate-600">
+              Coordinate team availability and snack sign-ups across custom meeting sessions.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5"
+          >
+            <span>➕</span> Add Meeting Session
+          </button>
         </header>
 
         {/* Tab Switcher */}
@@ -239,7 +314,7 @@ export default function Home() {
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            📅 Weekend Availability
+            📅 Availability Grid
           </button>
           <button
             onClick={() => setActiveTab('snacks')}
@@ -279,78 +354,81 @@ export default function Home() {
         {/* TAB 1: AVAILABILITY GRID */}
         {activeTab === 'availability' && (
           <div className="space-y-8">
-            {weekends.map((weekend) => {
-              const satDate = parseLocalDate(weekend.start_date);
-              const sunDate = new Date(satDate);
-              sunDate.setDate(satDate.getDate() + 1);
+            {sessions.map((session) => {
+              const sessionDates = session.dates.map((dStr) => parseLocalDate(dStr));
+              const timeSlots = generateTimeSlots(session.start_hour, session.end_hour);
 
-              // Find all unique respondents who submitted time slots for THIS specific weekend
-              const weekendRespondentSet = new Set<string>();
+              // Unique respondents for THIS session
+              const sessionRespondentSet = new Set<string>();
               allAvailabilities.forEach((item) => {
                 if (!item?.slot_time || !item?.user_name) return;
-                const d = new Date(item.slot_time);
-                const isSat =
-                  d.getFullYear() === satDate.getFullYear() &&
-                  d.getMonth() === satDate.getMonth() &&
-                  d.getDate() === satDate.getDate();
-                const isSun =
-                  d.getFullYear() === sunDate.getFullYear() &&
-                  d.getMonth() === sunDate.getMonth() &&
-                  d.getDate() === sunDate.getDate();
+                const slotD = new Date(item.slot_time);
 
-                if (isSat || isSun) {
-                  weekendRespondentSet.add(item.user_name.trim());
+                const matchesSession = sessionDates.some(
+                  (d) =>
+                    d.getFullYear() === slotD.getFullYear() &&
+                    d.getMonth() === slotD.getMonth() &&
+                    d.getDate() === slotD.getDate()
+                );
+
+                if (matchesSession) {
+                  sessionRespondentSet.add(item.user_name.trim());
                 }
               });
 
-              const weekendRespondentsList = Array.from(weekendRespondentSet);
-              const weekendRespondentsCount = weekendRespondentsList.length;
-
-              const isCurrentHoveredWeekend = hoveredSlot?.weekendId === weekend.id;
+              const sessionRespondentsList = Array.from(sessionRespondentSet);
+              const sessionRespondentsCount = sessionRespondentsList.length;
+              const isCurrentHoveredSession = hoveredSlot?.sessionId === session.id;
 
               return (
-                <div key={weekend.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
-                  <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{weekend.label}</h2>
+                <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+                  <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{session.label}</h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Left Column: Schedule Selector */}
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
-                      <ScheduleSelector
-                        startDate={satDate}
-                        numDays={2}
-                        minTime={10}
-                        maxTime={19}
-                        hourlyChunks={2}
-                        timeFormat="h:mm a"
-                        selection={selectedSlots}
-                        onChange={setSelectedSlots}
-                        selectedColor="#22c55e"
-                        unselectedColor="#f1f5f9"
-                      />
+                    {/* Left: Schedule Selector per session day */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-slate-600">Your Availability</h3>
+                      {sessionDates.map((d, dIdx) => (
+                        <div key={dIdx} className="border p-3 rounded-lg bg-slate-50 space-y-2">
+                          <span className="text-xs font-bold text-slate-700 block">
+                            {formatDateShort(d)}
+                          </span>
+                          <ScheduleSelector
+                            startDate={d}
+                            numDays={1}
+                            minTime={session.start_hour}
+                            maxTime={session.end_hour}
+                            hourlyChunks={2}
+                            timeFormat="h:mm a"
+                            selection={selectedSlots}
+                            onChange={setSelectedSlots}
+                            selectedColor="#22c55e"
+                            unselectedColor="#ffffff"
+                          />
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Right Column: Heatmap Grid + Inspector Panel */}
+                    {/* Right: Team Overlap Heatmap */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-baseline">
                         <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
                         <span className="text-xs text-slate-500">
-                          Respondents: {weekendRespondentsCount}
+                          Respondents: {sessionRespondentsCount}
                         </span>
                       </div>
 
-                      {/* SIDE-BY-SIDE HOVER INSPECTOR PANEL */}
-                      {isCurrentHoveredWeekend && hoveredSlot ? (
+                      {/* HOVER INSPECTOR PANEL */}
+                      {isCurrentHoveredSession && hoveredSlot ? (
                         <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
                           <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
                             <span>📅 {hoveredSlot.dayLabel} @ {hoveredSlot.timeLabel}</span>
                             <span className="text-[11px] font-normal text-slate-400">
-                              {hoveredSlot.available.length}/{weekendRespondentsCount} Free
+                              {hoveredSlot.available.length}/{sessionRespondentsCount} Free
                             </span>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4 pt-0.5">
-                            {/* Available List */}
                             <div className="space-y-1 border-r border-slate-800 pr-2">
                               <span className="text-emerald-400 font-semibold block">
                                 ✅ Available ({hoveredSlot.available.length})
@@ -364,7 +442,6 @@ export default function Home() {
                               )}
                             </div>
 
-                            {/* Unavailable List */}
                             <div className="space-y-1 pl-1">
                               <span className="text-rose-400 font-semibold block">
                                 ❌ Unavailable ({hoveredSlot.unavailable.length})
@@ -385,72 +462,67 @@ export default function Home() {
                         </div>
                       )}
 
-                      {/* Heatmap Table */}
+                      {/* Dynamic Heatmap Table */}
                       <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHoveredSlot(null)}>
-                        <div className="grid grid-cols-3 text-center font-semibold text-slate-600 border-b pb-2 mb-1">
+                        <div
+                          className="grid text-center font-semibold text-slate-600 border-b pb-2 mb-1"
+                          style={{
+                            gridTemplateColumns: `60px repeat(${sessionDates.length}, minmax(0, 1fr))`,
+                          }}
+                        >
                           <div>Time</div>
-                          <div>{satDate.getMonth() + 1}/{satDate.getDate()} (Sat)</div>
-                          <div>{sunDate.getMonth() + 1}/{sunDate.getDate()} (Sun)</div>
+                          {sessionDates.map((d, idx) => (
+                            <div key={idx}>{formatDateShort(d)}</div>
+                          ))}
                         </div>
 
                         <div className="space-y-1">
-                          {timeSlots.map((slot, i) => {
-                            const satSlotDate = new Date(satDate.getFullYear(), satDate.getMonth(), satDate.getDate(), slot.hour, slot.minute);
-                            const sunSlotDate = new Date(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate(), slot.hour, slot.minute);
+                          {timeSlots.map((slot, i) => (
+                            <div
+                              key={i}
+                              className="grid gap-1 items-center h-6"
+                              style={{
+                                gridTemplateColumns: `60px repeat(${sessionDates.length}, minmax(0, 1fr))`,
+                              }}
+                            >
+                              <div className="text-slate-400 text-right pr-2 text-[10px]">{slot.label}</div>
 
-                            const satUsers = slotUserMap.get(getSlotKey(satSlotDate)) || [];
-                            const sunUsers = slotUserMap.get(getSlotKey(sunSlotDate)) || [];
+                              {sessionDates.map((d, dIdx) => {
+                                const slotDate = new Date(
+                                  d.getFullYear(),
+                                  d.getMonth(),
+                                  d.getDate(),
+                                  slot.hour,
+                                  slot.minute
+                                );
 
-                            const satUnavailable = weekendRespondentsList.filter((u) => !satUsers.includes(u));
-                            const sunUnavailable = weekendRespondentsList.filter((u) => !sunUsers.includes(u));
+                                const users = slotUserMap.get(getSlotKey(slotDate)) || [];
+                                const unavailable = sessionRespondentsList.filter((u) => !users.includes(u));
+                                const opacity = sessionRespondentsCount > 0 ? users.length / sessionRespondentsCount : 0;
 
-                            const satOpacity = weekendRespondentsCount > 0 ? satUsers.length / weekendRespondentsCount : 0;
-                            const sunOpacity = weekendRespondentsCount > 0 ? sunUsers.length / weekendRespondentsCount : 0;
-
-                            return (
-                              <div key={i} className="grid grid-cols-3 gap-1 items-center h-6">
-                                <div className="text-slate-400 text-right pr-2 text-[10px]">{slot.label}</div>
-
-                                {/* Saturday Cell */}
-                                <div
-                                  onMouseEnter={() =>
-                                    setHoveredSlot({
-                                      weekendId: weekend.id,
-                                      dayLabel: `${satDate.getMonth() + 1}/${satDate.getDate()} (Sat)`,
-                                      timeLabel: slot.label,
-                                      available: satUsers,
-                                      unavailable: satUnavailable,
-                                    })
-                                  }
-                                  style={{
-                                    backgroundColor: satUsers.length > 0 ? `rgba(34, 197, 94, ${Math.max(satOpacity, 0.3)})` : '#f1f5f9',
-                                  }}
-                                  className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer hover:ring-2 hover:ring-slate-800 transition-all"
-                                >
-                                  {satUsers.length > 0 ? satUsers.length : ''}
-                                </div>
-
-                                {/* Sunday Cell */}
-                                <div
-                                  onMouseEnter={() =>
-                                    setHoveredSlot({
-                                      weekendId: weekend.id,
-                                      dayLabel: `${sunDate.getMonth() + 1}/${sunDate.getDate()} (Sun)`,
-                                      timeLabel: slot.label,
-                                      available: sunUsers,
-                                      unavailable: sunUnavailable,
-                                    })
-                                  }
-                                  style={{
-                                    backgroundColor: sunUsers.length > 0 ? `rgba(34, 197, 94, ${Math.max(sunOpacity, 0.3)})` : '#f1f5f9',
-                                  }}
-                                  className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer hover:ring-2 hover:ring-slate-800 transition-all"
-                                >
-                                  {sunUsers.length > 0 ? sunUsers.length : ''}
-                                </div>
-                              </div>
-                            );
-                          })}
+                                return (
+                                  <div
+                                    key={dIdx}
+                                    onMouseEnter={() =>
+                                      setHoveredSlot({
+                                        sessionId: session.id,
+                                        dayLabel: formatDateShort(d),
+                                        timeLabel: slot.label,
+                                        available: users,
+                                        unavailable: unavailable,
+                                      })
+                                    }
+                                    style={{
+                                      backgroundColor: users.length > 0 ? `rgba(34, 197, 94, ${Math.max(opacity, 0.3)})` : '#f1f5f9',
+                                    }}
+                                    className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer hover:ring-2 hover:ring-slate-800 transition-all"
+                                  >
+                                    {users.length > 0 ? users.length : ''}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -464,99 +536,157 @@ export default function Home() {
         {/* TAB 2: SNACK SIGN-UP */}
         {activeTab === 'snacks' && (
           <div className="space-y-8">
-            {weekends.map((weekend) => {
-              const satDate = parseLocalDate(weekend.start_date);
-              const sunDate = new Date(satDate);
-              sunDate.setDate(satDate.getDate() + 1);
+            {sessions.map((session) => (
+              <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+                <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{session.label}</h2>
 
-              const satSignups = snackSignups.filter((s) => s.weekend_id === weekend.id && s.day_of_week === 'sat');
-              const sunSignups = snackSignups.filter((s) => s.weekend_id === weekend.id && s.day_of_week === 'sun');
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {session.dates.map((dateStr, idx) => {
+                    const d = parseLocalDate(dateStr);
+                    const daySignups = snackSignups.filter(
+                      (s) => (s.session_id === session.id || (s as any).weekend_id === session.id) && (s.date_str === dateStr || (s as any).day_of_week === dateStr)
+                    );
 
-              return (
-                <div key={weekend.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
-                  <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{weekend.label}</h2>
+                    return (
+                      <div key={idx} className="border rounded-lg p-5 bg-slate-50 space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2">
+                          <h3 className="font-semibold text-slate-700">
+                            {formatDateShort(d)} Snacks
+                          </h3>
+                          <button
+                            onClick={() => handleAddSnackSignup(session.id, dateStr)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded transition"
+                          >
+                            + Sign Me Up
+                          </button>
+                        </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Saturday Snack Box */}
-                    <div className="border rounded-lg p-5 bg-slate-50 space-y-4">
-                      <div className="flex justify-between items-center border-b pb-2">
-                        <h3 className="font-semibold text-slate-700">
-                          {satDate.getMonth() + 1}/{satDate.getDate()} (Saturday) Snacks
-                        </h3>
-                        <button
-                          onClick={() => handleAddSnackSignup(weekend.id, 'sat')}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded transition"
-                        >
-                          + Sign Me Up
-                        </button>
+                        <div className="space-y-2">
+                          <span className="text-xs text-slate-500 font-medium">Bringing Snacks:</span>
+                          {daySignups.length === 0 ? (
+                            <p className="text-sm italic text-slate-400">No one signed up yet.</p>
+                          ) : (
+                            <ul className="flex flex-wrap gap-2">
+                              {daySignups.map((s) => (
+                                <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                                  <span>😊 {s.user_name}</span>
+                                  <button
+                                    onClick={() => handleRemoveSnackSignup(s.id)}
+                                    className="text-slate-400 hover:text-red-500 font-bold ml-1"
+                                    title="Remove sign-up"
+                                  >
+                                    ×
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </div>
-
-                      <div className="space-y-2">
-                        <span className="text-xs text-slate-500 font-medium">Bringing Snacks:</span>
-                        {satSignups.length === 0 ? (
-                          <p className="text-sm italic text-slate-400">No one signed up yet.</p>
-                        ) : (
-                          <ul className="flex flex-wrap gap-2">
-                            {satSignups.map((s) => (
-                              <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                <span>😊 {s.user_name}</span>
-                                <button
-                                  onClick={() => handleRemoveSnackSignup(s.id)}
-                                  className="text-slate-400 hover:text-red-500 font-bold ml-1"
-                                  title="Remove sign-up"
-                                >
-                                  ×
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Sunday Snack Box */}
-                    <div className="border rounded-lg p-5 bg-slate-50 space-y-4">
-                      <div className="flex justify-between items-center border-b pb-2">
-                        <h3 className="font-semibold text-slate-700">
-                          {sunDate.getMonth() + 1}/{sunDate.getDate()} (Sunday) Snacks
-                        </h3>
-                        <button
-                          onClick={() => handleAddSnackSignup(weekend.id, 'sun')}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded transition"
-                        >
-                          + Sign Me Up
-                        </button>
-                      </div>
-
-                      <div className="space-y-2">
-                        <span className="text-xs text-slate-500 font-medium">Bringing Snacks:</span>
-                        {sunSignups.length === 0 ? (
-                          <p className="text-sm italic text-slate-400">No one signed up yet.</p>
-                        ) : (
-                          <ul className="flex flex-wrap gap-2">
-                            {sunSignups.map((s) => (
-                              <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                <span>😄 {s.user_name}</span>
-                                <button
-                                  onClick={() => handleRemoveSnackSignup(s.id)}
-                                  className="text-slate-400 hover:text-red-500 font-bold ml-1"
-                                  title="Remove sign-up"
-                                >
-                                  ×
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>
+
+      {/* MODAL: ADD CUSTOM MEETING SESSION */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-bold text-slate-800">Add New Meeting Session</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSession} className="space-y-4 text-sm">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Session Label / Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Week 5: Mid-season Code Sprint"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Meeting Dates (Comma Separated YYYY-MM-DD)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 2026-08-13, 2026-08-15, 2026-08-16"
+                  value={newDatesStr}
+                  onChange={(e) => setNewDatesStr(e.target.value)}
+                  className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Supports 1, 2, or 3+ days (e.g. Thursday, Saturday, Sunday).
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Start Time (24h)</label>
+                  <select
+                    value={newStartHour}
+                    onChange={(e) => setNewStartHour(Number(e.target.value))}
+                    className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
+                  >
+                    {Array.from({ length: 24 }).map((_, i) => (
+                      <option key={i} value={i}>
+                        {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">End Time (24h)</label>
+                  <select
+                    value={newEndHour}
+                    onChange={(e) => setNewEndHour(Number(e.target.value))}
+                    className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
+                  >
+                    {Array.from({ length: 24 }).map((_, i) => (
+                      <option key={i} value={i}>
+                        {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
+                >
+                  Create Session
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
