@@ -18,6 +18,14 @@ interface SnackSignup {
   user_name: string;
 }
 
+interface HoveredSlotInfo {
+  weekendId: string;
+  dayLabel: string;
+  timeLabel: string;
+  available: string[];
+  unavailable: string[];
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'availability' | 'snacks'>('availability');
   const [userName, setUserName] = useState('');
@@ -29,6 +37,9 @@ export default function Home() {
   // Snack Sign-up States
   const [snackSignups, setSnackSignups] = useState<SnackSignup[]>([]);
   const [snackNameInput, setSnackNameInput] = useState('');
+
+  // Hover Inspector State
+  const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
 
   const DEFAULT_POLL_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -67,7 +78,6 @@ export default function Home() {
     setSelectedSlots(userDates);
   }, [userName, allAvailabilities]);
 
-  // Keep top name input synced with snack name input
   const handleNameChange = (val: string) => {
     setUserName(val);
     setSnackNameInput(val);
@@ -156,7 +166,6 @@ export default function Home() {
 
     const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
-    // Prevent duplicate entries for the same person on the same day
     const alreadySignedUp = snackSignups.some(
       (s) => s.weekend_id === weekendId && s.day_of_week === dayOfWeek && s.user_name.toLowerCase() === formattedName.toLowerCase()
     );
@@ -275,31 +284,36 @@ export default function Home() {
               const sunDate = new Date(satDate);
               sunDate.setDate(satDate.getDate() + 1);
 
-              const weekendRespondents = allAvailabilities?.length > 0
-                ? new Set(
-                    allAvailabilities
-                      .filter((item) => {
-                        if (!item?.slot_time || !item?.user_name) return false;
-                        const d = new Date(item.slot_time);
-                        const isSat =
-                          d.getFullYear() === satDate.getFullYear() &&
-                          d.getMonth() === satDate.getMonth() &&
-                          d.getDate() === satDate.getDate();
-                        const isSun =
-                          d.getFullYear() === sunDate.getFullYear() &&
-                          d.getMonth() === sunDate.getMonth() &&
-                          d.getDate() === sunDate.getDate();
-                        return isSat || isSun;
-                      })
-                      .map((item) => item.user_name.trim().toLowerCase())
-                  ).size
-                : 0;
+              // Find all unique respondents who submitted time slots for THIS specific weekend
+              const weekendRespondentSet = new Set<string>();
+              allAvailabilities.forEach((item) => {
+                if (!item?.slot_time || !item?.user_name) return;
+                const d = new Date(item.slot_time);
+                const isSat =
+                  d.getFullYear() === satDate.getFullYear() &&
+                  d.getMonth() === satDate.getMonth() &&
+                  d.getDate() === satDate.getDate();
+                const isSun =
+                  d.getFullYear() === sunDate.getFullYear() &&
+                  d.getMonth() === sunDate.getMonth() &&
+                  d.getDate() === sunDate.getDate();
+
+                if (isSat || isSun) {
+                  weekendRespondentSet.add(item.user_name.trim());
+                }
+              });
+
+              const weekendRespondentsList = Array.from(weekendRespondentSet);
+              const weekendRespondentsCount = weekendRespondentsList.length;
+
+              const isCurrentHoveredWeekend = hoveredSlot?.weekendId === weekend.id;
 
               return (
                 <div key={weekend.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
                   <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{weekend.label}</h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left Column: Schedule Selector */}
                     <div>
                       <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
                       <ScheduleSelector
@@ -316,13 +330,63 @@ export default function Home() {
                       />
                     </div>
 
-                    <div>
-                      <div className="flex justify-between items-baseline mb-3">
+                    {/* Right Column: Heatmap Grid + Inspector Panel */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-baseline">
                         <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
-                        <span className="text-xs text-slate-500">Respondents: {weekendRespondents}</span>
+                        <span className="text-xs text-slate-500">
+                          Respondents: {weekendRespondentsCount}
+                        </span>
                       </div>
 
-                      <div className="border rounded bg-white p-2 text-xs">
+                      {/* SIDE-BY-SIDE HOVER INSPECTOR PANEL */}
+                      {isCurrentHoveredWeekend && hoveredSlot ? (
+                        <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
+                          <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
+                            <span>📅 {hoveredSlot.dayLabel} @ {hoveredSlot.timeLabel}</span>
+                            <span className="text-[11px] font-normal text-slate-400">
+                              {hoveredSlot.available.length}/{weekendRespondentsCount} Free
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 pt-0.5">
+                            {/* Available List */}
+                            <div className="space-y-1 border-r border-slate-800 pr-2">
+                              <span className="text-emerald-400 font-semibold block">
+                                ✅ Available ({hoveredSlot.available.length})
+                              </span>
+                              {hoveredSlot.available.length > 0 ? (
+                                <p className="text-slate-300 leading-relaxed font-medium">
+                                  {hoveredSlot.available.join(', ')}
+                                </p>
+                              ) : (
+                                <p className="text-slate-500 italic">None</p>
+                              )}
+                            </div>
+
+                            {/* Unavailable List */}
+                            <div className="space-y-1 pl-1">
+                              <span className="text-rose-400 font-semibold block">
+                                ❌ Unavailable ({hoveredSlot.unavailable.length})
+                              </span>
+                              {hoveredSlot.unavailable.length > 0 ? (
+                                <p className="text-slate-300 leading-relaxed font-medium">
+                                  {hoveredSlot.unavailable.join(', ')}
+                                </p>
+                              ) : (
+                                <p className="text-slate-500 italic">None</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-100 p-3 rounded-lg text-xs text-slate-500 italic text-center border border-dashed border-slate-300">
+                          Hover over any time slot below to inspect who is available and who is busy.
+                        </div>
+                      )}
+
+                      {/* Heatmap Table */}
+                      <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHoveredSlot(null)}>
                         <div className="grid grid-cols-3 text-center font-semibold text-slate-600 border-b pb-2 mb-1">
                           <div>Time</div>
                           <div>{satDate.getMonth() + 1}/{satDate.getDate()} (Sat)</div>
@@ -337,29 +401,50 @@ export default function Home() {
                             const satUsers = slotUserMap.get(getSlotKey(satSlotDate)) || [];
                             const sunUsers = slotUserMap.get(getSlotKey(sunSlotDate)) || [];
 
-                            const satOpacity = weekendRespondents > 0 ? satUsers.length / weekendRespondents : 0;
-                            const sunOpacity = weekendRespondents > 0 ? sunUsers.length / weekendRespondents : 0;
+                            const satUnavailable = weekendRespondentsList.filter((u) => !satUsers.includes(u));
+                            const sunUnavailable = weekendRespondentsList.filter((u) => !sunUsers.includes(u));
+
+                            const satOpacity = weekendRespondentsCount > 0 ? satUsers.length / weekendRespondentsCount : 0;
+                            const sunOpacity = weekendRespondentsCount > 0 ? sunUsers.length / weekendRespondentsCount : 0;
 
                             return (
                               <div key={i} className="grid grid-cols-3 gap-1 items-center h-6">
                                 <div className="text-slate-400 text-right pr-2 text-[10px]">{slot.label}</div>
 
+                                {/* Saturday Cell */}
                                 <div
-                                  title={satUsers.length > 0 ? `${satUsers.length}/${weekendRespondents} free: ${satUsers.join(', ')}` : '0 available'}
+                                  onMouseEnter={() =>
+                                    setHoveredSlot({
+                                      weekendId: weekend.id,
+                                      dayLabel: `${satDate.getMonth() + 1}/${satDate.getDate()} (Sat)`,
+                                      timeLabel: slot.label,
+                                      available: satUsers,
+                                      unavailable: satUnavailable,
+                                    })
+                                  }
                                   style={{
                                     backgroundColor: satUsers.length > 0 ? `rgba(34, 197, 94, ${Math.max(satOpacity, 0.3)})` : '#f1f5f9',
                                   }}
-                                  className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px]"
+                                  className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer hover:ring-2 hover:ring-slate-800 transition-all"
                                 >
                                   {satUsers.length > 0 ? satUsers.length : ''}
                                 </div>
 
+                                {/* Sunday Cell */}
                                 <div
-                                  title={sunUsers.length > 0 ? `${sunUsers.length}/${weekendRespondents} free: ${sunUsers.join(', ')}` : '0 available'}
+                                  onMouseEnter={() =>
+                                    setHoveredSlot({
+                                      weekendId: weekend.id,
+                                      dayLabel: `${sunDate.getMonth() + 1}/${sunDate.getDate()} (Sun)`,
+                                      timeLabel: slot.label,
+                                      available: sunUsers,
+                                      unavailable: sunUnavailable,
+                                    })
+                                  }
                                   style={{
                                     backgroundColor: sunUsers.length > 0 ? `rgba(34, 197, 94, ${Math.max(sunOpacity, 0.3)})` : '#f1f5f9',
                                   }}
-                                  className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px]"
+                                  className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer hover:ring-2 hover:ring-slate-800 transition-all"
                                 >
                                   {sunUsers.length > 0 ? sunUsers.length : ''}
                                 </div>
@@ -451,7 +536,7 @@ export default function Home() {
                           <ul className="flex flex-wrap gap-2">
                             {sunSignups.map((s) => (
                               <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                <span>😋 {s.user_name}</span>
+                                <span>😄 {s.user_name}</span>
                                 <button
                                   onClick={() => handleRemoveSnackSignup(s.id)}
                                   className="text-slate-400 hover:text-red-500 font-bold ml-1"
