@@ -37,6 +37,10 @@ export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
+  // ADMIN MODE STATE
+  const [isAdmin, setIsAdmin] = useState(false);
+  const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123'; // Set in .env.local or fallback
+
   // Global Session Status Filter ('active' | 'inactive' | 'all')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
@@ -81,6 +85,12 @@ export default function Home() {
     fetchSessions();
     fetchAvailabilities();
     fetchSnackSignups();
+
+    // Check saved Admin Mode session
+    const savedAdmin = localStorage.getItem('is_team_admin');
+    if (savedAdmin === 'true') {
+      setIsAdmin(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -96,6 +106,23 @@ export default function Home() {
     const userDates = userEntries.map((item) => new Date(item.slot_time));
     setSelectedSlots(userDates);
   }, [userName, allAvailabilities]);
+
+  // Handle Admin Access Toggle
+  const handleAdminToggle = () => {
+    if (isAdmin) {
+      setIsAdmin(false);
+      localStorage.removeItem('is_team_admin');
+      setStatusFilter('active');
+    } else {
+      const code = prompt('Enter Admin Passcode:');
+      if (code === ADMIN_PASSCODE) {
+        setIsAdmin(true);
+        localStorage.setItem('is_team_admin', 'true');
+      } else if (code !== null) {
+        alert('Incorrect admin passcode.');
+      }
+    }
+  };
 
   const handleNameChange = (val: string) => {
     setUserName(val);
@@ -190,6 +217,7 @@ export default function Home() {
   };
 
   const handleToggleActive = async (session: Session) => {
+    if (!isAdmin) return;
     const newStatus = !session.is_active;
 
     setSessions((prev) =>
@@ -208,6 +236,7 @@ export default function Home() {
   };
 
   const handleMoveSession = async (index: number, direction: 'up' | 'down') => {
+    if (!isAdmin) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= filteredSessions.length) return;
 
@@ -232,6 +261,7 @@ export default function Home() {
   };
 
   const openAddModal = () => {
+    if (!isAdmin) return;
     setEditingSessionId(null);
     setModalLabel('');
     setModalDates(['']);
@@ -241,6 +271,7 @@ export default function Home() {
   };
 
   const openEditModal = (session: Session) => {
+    if (!isAdmin) return;
     setEditingSessionId(session.id);
     setModalLabel(session.label);
     setModalDates(session.dates.length > 0 ? session.dates : ['']);
@@ -255,7 +286,6 @@ export default function Home() {
     setModalDates(updated);
   };
 
-  // SMART DATE AUTO-FILL: Default newly added field to (last date + 1 day)
   const addDateField = () => {
     if (modalDates.length > 0) {
       const lastDateVal = modalDates[modalDates.length - 1];
@@ -283,6 +313,8 @@ export default function Home() {
 
   const handleSaveSession = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
+
     const validDates = modalDates.filter((d) => d.trim() !== '');
 
     if (!modalLabel.trim() || validDates.length === 0) {
@@ -377,7 +409,9 @@ export default function Home() {
     await fetchSnackSignups();
   };
 
+  // Filter sessions (Non-admins only ever see active sessions)
   const filteredSessions = sessions.filter((session) => {
+    if (!isAdmin) return session.is_active;
     if (statusFilter === 'active') return session.is_active;
     if (statusFilter === 'inactive') return !session.is_active;
     return true;
@@ -414,15 +448,33 @@ export default function Home() {
               Coordinate team availability and snack sign-ups across custom meeting sessions.
             </p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5"
-          >
-            <span>➕</span> Add Meeting Session
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* ADMIN TOGGLE BUTTON */}
+            <button
+              onClick={handleAdminToggle}
+              className={`text-xs px-3 py-2 rounded-lg font-semibold border transition ${
+                isAdmin
+                  ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              {isAdmin ? '🔒 Exit Admin Mode' : '🔑 Coach / Admin Access'}
+            </button>
+
+            {/* ADD MEETING BUTTON (ADMIN ONLY) */}
+            {isAdmin && (
+              <button
+                onClick={openAddModal}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5"
+              >
+                <span>➕</span> Add Meeting Session
+              </button>
+            )}
+          </div>
         </header>
 
-        {/* Tab Switcher & Active/Inactive Filter Bar */}
+        {/* Tab Switcher & Status Filter Bar */}
         <div className="flex flex-wrap justify-between items-center border-b border-slate-200 gap-4">
           <div className="flex">
             <button
@@ -447,38 +499,41 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-lg text-xs font-medium">
-            <button
-              onClick={() => setStatusFilter('active')}
-              className={`px-3 py-1.5 rounded-md transition ${
-                statusFilter === 'active'
-                  ? 'bg-white text-slate-800 shadow-sm font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              🟢 Active ({sessions.filter((s) => s.is_active).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('inactive')}
-              className={`px-3 py-1.5 rounded-md transition ${
-                statusFilter === 'inactive'
-                  ? 'bg-white text-slate-800 shadow-sm font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              ⚪ Inactive ({sessions.filter((s) => !s.is_active).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-md transition ${
-                statusFilter === 'all'
-                  ? 'bg-white text-slate-800 shadow-sm font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              📂 All ({sessions.length})
-            </button>
-          </div>
+          {/* ACTIVE / INACTIVE FILTER SWITCHER (ADMIN ONLY) */}
+          {isAdmin && (
+            <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-lg text-xs font-medium">
+              <button
+                onClick={() => setStatusFilter('active')}
+                className={`px-3 py-1.5 rounded-md transition ${
+                  statusFilter === 'active'
+                    ? 'bg-white text-slate-800 shadow-sm font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                🟢 Active ({sessions.filter((s) => s.is_active).length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('inactive')}
+                className={`px-3 py-1.5 rounded-md transition ${
+                  statusFilter === 'inactive'
+                    ? 'bg-white text-slate-800 shadow-sm font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ⚪ Inactive ({sessions.filter((s) => !s.is_active).length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-md transition ${
+                  statusFilter === 'all'
+                    ? 'bg-white text-slate-800 shadow-sm font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                📂 All ({sessions.length})
+              </button>
+            </div>
+          )}
         </div>
 
         {/* User Name Bar */}
@@ -509,7 +564,7 @@ export default function Home() {
           <div className="space-y-8">
             {filteredSessions.length === 0 ? (
               <div className="bg-white p-12 text-center rounded-lg border text-slate-500 italic">
-                No {statusFilter} meeting sessions found.
+                No active meeting sessions found.
               </div>
             ) : (
               filteredSessions.map((session, sessionIdx) => {
@@ -550,47 +605,53 @@ export default function Home() {
                       <div className="flex items-center gap-3">
                         <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
 
-                        <button
-                          onClick={() => handleToggleActive(session)}
-                          className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border transition ${
-                            session.is_active
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                              : 'bg-slate-200 text-slate-600 border-slate-300 hover:bg-slate-300'
-                          }`}
-                          title="Click to toggle Active/Inactive"
-                        >
-                          {session.is_active ? '🟢 Active' : '⚪ Inactive'}
-                        </button>
+                        {/* ACTIVE BADGE (CLICKABLE FOR ADMIN ONLY) */}
+                        {isAdmin ? (
+                          <button
+                            onClick={() => handleToggleActive(session)}
+                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border transition ${
+                              session.is_active
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-slate-200 text-slate-600 border-slate-300 hover:bg-slate-300'
+                            }`}
+                            title="Click to toggle Active/Inactive"
+                          >
+                            {session.is_active ? '🟢 Active' : '⚪ Inactive'}
+                          </button>
+                        ) : null}
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          disabled={sessionIdx === 0}
-                          onClick={() => handleMoveSession(sessionIdx, 'up')}
-                          className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 text-slate-600"
-                          title="Move Up"
-                        >
-                          ⬆️ Up
-                        </button>
-                        <button
-                          disabled={sessionIdx === filteredSessions.length - 1}
-                          onClick={() => handleMoveSession(sessionIdx, 'down')}
-                          className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 text-slate-600"
-                          title="Move Down"
-                        >
-                          ⬇️ Down
-                        </button>
-                        <button
-                          onClick={() => openEditModal(session)}
-                          className="text-xs text-slate-600 hover:text-blue-600 font-medium border px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 transition"
-                        >
-                          ✏️ Edit Title & Dates
-                        </button>
-                      </div>
+                      {/* ADMIN ACTION BUTTONS (UP, DOWN, EDIT) */}
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={sessionIdx === 0}
+                            onClick={() => handleMoveSession(sessionIdx, 'up')}
+                            className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 text-slate-600"
+                            title="Move Up"
+                          >
+                            ⬆️ Up
+                          </button>
+                          <button
+                            disabled={sessionIdx === filteredSessions.length - 1}
+                            onClick={() => handleMoveSession(sessionIdx, 'down')}
+                            className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 text-slate-600"
+                            title="Move Down"
+                          >
+                            ⬇️ Down
+                          </button>
+                          <button
+                            onClick={() => openEditModal(session)}
+                            className="text-xs text-slate-600 hover:text-blue-600 font-medium border px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 transition"
+                          >
+                            ✏️ Edit Title & Dates
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Left: Schedule Selector (Horizontal Grid) */}
+                      {/* Left: Schedule Selector */}
                       <div>
                         <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
                         <ScheduleSelector
@@ -617,7 +678,7 @@ export default function Home() {
                           </span>
                         </div>
 
-                        {/* HOVER INSPECTOR PANEL */}
+                        {/* HOVER INSPECTOR */}
                         {isCurrentHoveredSession && hoveredSlot ? (
                           <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
                             <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
@@ -740,15 +801,6 @@ export default function Home() {
               <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
                 <div className="flex items-center gap-3 border-b pb-2">
                   <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
-                  <span
-                    className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
-                      session.is_active
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                        : 'bg-slate-200 text-slate-600 border-slate-300'
-                    }`}
-                  >
-                    {session.is_active ? '🟢 Active' : '⚪ Inactive'}
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -806,7 +858,7 @@ export default function Home() {
       </div>
 
       {/* MODAL: ADD / EDIT MEETING SESSION */}
-      {showModal && (
+      {showModal && isAdmin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
