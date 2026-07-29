@@ -21,6 +21,11 @@ interface SnackSignup {
   user_name: string;
 }
 
+interface TeamMember {
+  id: string;
+  name: string;
+}
+
 interface HoveredSlotInfo {
   sessionId: string;
   dayLabel: string;
@@ -37,9 +42,13 @@ export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
+  // TEAM ROSTER STATE
+  const [teamRoster, setTeamRoster] = useState<TeamMember[]>([]);
+  const [newMemberName, setNewMemberName] = useState('');
+
   // ADMIN MODE STATE
   const [isAdmin, setIsAdmin] = useState(false);
-  const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123'; // Set in .env.local or fallback
+  const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123';
 
   // Global Session Status Filter ('active' | 'inactive' | 'all')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
@@ -85,8 +94,8 @@ export default function Home() {
     fetchSessions();
     fetchAvailabilities();
     fetchSnackSignups();
+    fetchTeamRoster();
 
-    // Check saved Admin Mode session
     const savedAdmin = localStorage.getItem('is_team_admin');
     if (savedAdmin === 'true') {
       setIsAdmin(true);
@@ -107,7 +116,52 @@ export default function Home() {
     setSelectedSlots(userDates);
   }, [userName, allAvailabilities]);
 
-  // Handle Admin Access Toggle
+  // Case-insensitive team roster check
+  const isNameVerified = teamRoster.some(
+    (member) => member.name.trim().toLowerCase() === userName.trim().toLowerCase()
+  );
+
+  const fetchTeamRoster = async () => {
+    const { data } = await supabase.from('team_roster').select('*').order('name', { ascending: true });
+    if (data && data.length > 0) {
+      setTeamRoster(data);
+    } else {
+      // Fallback roster with all 14 members
+      const defaultNames = [
+        'Elaine', 'Emma', 'Ellie', 'Aranya', 'Mananya',
+        'Joseph', 'Jonah', 'Jacob', 'Rohan', 'Thomas',
+        'Max', 'Vivian', 'Emily', 'Ethan'
+      ];
+      setTeamRoster(defaultNames.map((name, idx) => ({ id: String(idx + 1), name })));
+    }
+  };
+
+  const handleAddRosterMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMemberName.trim()) return;
+
+    const formattedName = newMemberName.trim().charAt(0).toUpperCase() + newMemberName.trim().slice(1);
+
+    const { error } = await supabase.from('team_roster').insert([{ name: formattedName }]);
+
+    if (error) {
+      alert(`Error adding member: ${error.message}`);
+      return;
+    }
+
+    setNewMemberName('');
+    await fetchTeamRoster();
+  };
+
+  const handleRemoveRosterMember = async (id: string) => {
+    const { error } = await supabase.from('team_roster').delete().eq('id', id);
+    if (error) {
+      alert(`Error removing member: ${error.message}`);
+      return;
+    }
+    await fetchTeamRoster();
+  };
+
   const handleAdminToggle = () => {
     if (isAdmin) {
       setIsAdmin(false);
@@ -149,15 +203,6 @@ export default function Home() {
           display_order: 1,
           is_active: true,
         },
-        {
-          id: '2',
-          label: 'Week 2: Aug 22 - Aug 23',
-          dates: ['2026-08-22', '2026-08-23'],
-          start_hour: 10,
-          end_hour: 19,
-          display_order: 2,
-          is_active: true,
-        },
       ]);
     }
   };
@@ -186,8 +231,15 @@ export default function Home() {
       return;
     }
 
-    const raw = userName.trim();
-    const formattedName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+    if (!isNameVerified) {
+      alert('Your name was not found on the team roster. Please select your name from the list or contact an admin.');
+      return;
+    }
+
+    const matchedMember = teamRoster.find(
+      (m) => m.name.toLowerCase() === userName.trim().toLowerCase()
+    );
+    const formattedName = matchedMember ? matchedMember.name : userName.trim();
 
     await supabase
       .from('availabilities')
@@ -367,7 +419,15 @@ export default function Home() {
       return;
     }
 
-    const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    if (!isNameVerified) {
+      alert('Your name was not found on the team roster.');
+      return;
+    }
+
+    const matchedMember = teamRoster.find(
+      (m) => m.name.toLowerCase() === name.toLowerCase()
+    );
+    const formattedName = matchedMember ? matchedMember.name : name;
 
     const alreadySignedUp = snackSignups.some(
       (s) =>
@@ -409,7 +469,6 @@ export default function Home() {
     await fetchSnackSignups();
   };
 
-  // Filter sessions (Non-admins only ever see active sessions)
   const filteredSessions = sessions.filter((session) => {
     if (!isAdmin) return session.is_active;
     if (statusFilter === 'active') return session.is_active;
@@ -450,7 +509,6 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* ADMIN TOGGLE BUTTON */}
             <button
               onClick={handleAdminToggle}
               className={`text-xs px-3 py-2 rounded-lg font-semibold border transition ${
@@ -462,7 +520,6 @@ export default function Home() {
               {isAdmin ? '🔒 Exit Admin Mode' : '🔑 Coach / Admin Access'}
             </button>
 
-            {/* ADD MEETING BUTTON (ADMIN ONLY) */}
             {isAdmin && (
               <button
                 onClick={openAddModal}
@@ -499,7 +556,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* ACTIVE / INACTIVE FILTER SWITCHER (ADMIN ONLY) */}
           {isAdmin && (
             <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-lg text-xs font-medium">
               <button
@@ -536,28 +592,99 @@ export default function Home() {
           )}
         </div>
 
-        {/* User Name Bar */}
-        <div className="flex gap-4 items-center bg-white p-4 rounded-lg shadow-sm border sticky top-4 z-10">
-          <label className="font-semibold text-slate-700">Your Name:</label>
-          <input
-            type="text"
-            placeholder="e.g. Alex"
-            value={userName}
-            onChange={(e) => handleNameChange(e.target.value)}
-            className="border px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {activeTab === 'availability' && (
-            <>
-              <button
-                onClick={handleSaveAvailability}
-                className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-1.5 rounded-md transition"
-              >
-                Save My Availability
-              </button>
-              {isSubmitted && <span className="text-sm text-green-600 font-medium">✓ Saved!</span>}
-            </>
-          )}
+        {/* USER NAME BAR WITH ROSTER VALIDATION */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border space-y-2 sticky top-4 z-10">
+          <div className="flex flex-wrap gap-4 items-center">
+            <label className="font-semibold text-slate-700">Your Name:</label>
+
+            <div className="relative flex-1 max-w-xs">
+              <input
+                type="text"
+                list="team-roster-list"
+                placeholder="Select or type your name..."
+                value={userName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                className="w-full border px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              <datalist id="team-roster-list">
+                {teamRoster.map((m) => (
+                  <option key={m.id} value={m.name} />
+                ))}
+              </datalist>
+            </div>
+
+            {userName.trim() !== '' && (
+              <div>
+                {isNameVerified ? (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    ✓ Verified Team Member
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                    ⚠️ Name not on roster
+                  </span>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'availability' && (
+              <>
+                <button
+                  onClick={handleSaveAvailability}
+                  disabled={!isNameVerified}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-4 py-1.5 rounded-md transition text-sm ml-auto"
+                >
+                  Save My Availability
+                </button>
+                {isSubmitted && <span className="text-sm text-green-600 font-medium">✓ Saved!</span>}
+              </>
+            )}
+          </div>
         </div>
+
+        {/* ADMIN ROSTER MANAGER PANEL */}
+        {isAdmin && (
+          <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-lg space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">
+              ⚙️ Admin: Manage Approved Team Roster ({teamRoster.length} Members)
+            </h3>
+
+            <form onSubmit={handleAddRosterMember} className="flex gap-2 max-w-md">
+              <input
+                type="text"
+                placeholder="New member full name..."
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                className="border px-3 py-1 rounded-md text-xs flex-1 bg-white"
+              />
+              <button
+                type="submit"
+                className="bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs px-3 py-1 rounded-md transition"
+              >
+                + Add Member
+              </button>
+            </form>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {teamRoster.map((m) => (
+                <span
+                  key={m.id}
+                  className="bg-white border text-slate-700 text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>{m.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRosterMember(m.id)}
+                    className="text-slate-400 hover:text-red-600 font-bold ml-1 text-xs"
+                    title="Remove from roster"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* TAB 1: AVAILABILITY GRID */}
         {activeTab === 'availability' && (
@@ -605,8 +732,7 @@ export default function Home() {
                       <div className="flex items-center gap-3">
                         <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
 
-                        {/* ACTIVE BADGE (CLICKABLE FOR ADMIN ONLY) */}
-                        {isAdmin ? (
+                        {isAdmin && (
                           <button
                             onClick={() => handleToggleActive(session)}
                             className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border transition ${
@@ -618,10 +744,9 @@ export default function Home() {
                           >
                             {session.is_active ? '🟢 Active' : '⚪ Inactive'}
                           </button>
-                        ) : null}
+                        )}
                       </div>
 
-                      {/* ADMIN ACTION BUTTONS (UP, DOWN, EDIT) */}
                       {isAdmin && (
                         <div className="flex items-center gap-2">
                           <button
@@ -820,7 +945,8 @@ export default function Home() {
                           </h3>
                           <button
                             onClick={() => handleAddSnackSignup(session.id, dateStr)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded transition"
+                            disabled={!isNameVerified}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded transition"
                           >
                             + Sign Me Up
                           </button>
