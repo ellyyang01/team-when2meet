@@ -126,7 +126,6 @@ export default function Home() {
     if (data && data.length > 0) {
       setTeamRoster(data);
     } else {
-      // Fallback roster with all 14 members
       const defaultNames = [
         'Elaine', 'Emma', 'Ellie', 'Aranya', 'Mananya',
         'Joseph', 'Jonah', 'Jacob', 'Rohan', 'Thomas',
@@ -412,22 +411,30 @@ export default function Home() {
     await fetchSessions();
   };
 
-  const handleAddSnackSignup = async (sessionId: string, dateStr: string) => {
-    const name = snackNameInput.trim();
-    if (!name) {
-      alert('Please enter your name first.');
-      return;
+  // ADD SNACK SIGNUP (Individual or Team Funds)
+  const handleAddSnackSignup = async (sessionId: string, dateStr: string, customName?: string) => {
+    const isTeamFunds = customName === 'Team Funds';
+    const nameToSign = isTeamFunds ? 'Team Funds' : snackNameInput.trim();
+
+    if (!isTeamFunds) {
+      if (!nameToSign) {
+        alert('Please enter your name first.');
+        return;
+      }
+
+      if (!isNameVerified) {
+        alert('Your name was not found on the team roster.');
+        return;
+      }
     }
 
-    if (!isNameVerified) {
-      alert('Your name was not found on the team roster.');
-      return;
+    let formattedName = nameToSign;
+    if (!isTeamFunds) {
+      const matchedMember = teamRoster.find(
+        (m) => m.name.toLowerCase() === nameToSign.toLowerCase()
+      );
+      formattedName = matchedMember ? matchedMember.name : nameToSign;
     }
-
-    const matchedMember = teamRoster.find(
-      (m) => m.name.toLowerCase() === name.toLowerCase()
-    );
-    const formattedName = matchedMember ? matchedMember.name : name;
 
     const alreadySignedUp = snackSignups.some(
       (s) =>
@@ -437,7 +444,7 @@ export default function Home() {
     );
 
     if (alreadySignedUp) {
-      alert(`${formattedName} is already signed up for snacks on this date!`);
+      alert(`${formattedName} is already listed for snacks on this date!`);
       return;
     }
 
@@ -776,7 +783,6 @@ export default function Home() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Left: Schedule Selector */}
                       <div>
                         <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
                         <ScheduleSelector
@@ -794,7 +800,6 @@ export default function Home() {
                         />
                       </div>
 
-                      {/* Right: Heatmap Grid */}
                       <div className="space-y-3">
                         <div className="flex justify-between items-baseline">
                           <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
@@ -803,7 +808,6 @@ export default function Home() {
                           </span>
                         </div>
 
-                        {/* HOVER INSPECTOR */}
                         {isCurrentHoveredSession && hoveredSlot ? (
                           <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
                             <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
@@ -847,7 +851,6 @@ export default function Home() {
                           </div>
                         )}
 
-                        {/* Heatmap Table */}
                         <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHoveredSlot(null)}>
                           <div
                             className="grid text-center font-semibold text-slate-600 border-b pb-2 mb-1"
@@ -919,7 +922,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 2: SNACK SIGN-UP */}
+        {/* TAB 2: SNACK SIGN-UP WITH TEAM FUNDS OPTION */}
         {activeTab === 'snacks' && (
           <div className="space-y-8">
             {filteredSessions.map((session) => (
@@ -943,13 +946,25 @@ export default function Home() {
                           <h3 className="font-semibold text-slate-700">
                             {formatDateShort(d)} Snacks
                           </h3>
-                          <button
-                            onClick={() => handleAddSnackSignup(session.id, dateStr)}
-                            disabled={!isNameVerified}
-                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded transition"
-                          >
-                            + Sign Me Up
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {/* TEAM FUNDS BUTTON */}
+                            <button
+                              onClick={() => handleAddSnackSignup(session.id, dateStr, 'Team Funds')}
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold px-2 py-1 rounded transition"
+                              title="Cover snacks using team funds"
+                            >
+                              💰 Team Funds
+                            </button>
+
+                            {/* INDIVIDUAL SIGN UP */}
+                            <button
+                              onClick={() => handleAddSnackSignup(session.id, dateStr)}
+                              disabled={!isNameVerified}
+                              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-medium px-2 py-1 rounded transition"
+                            >
+                              + Sign Me Up
+                            </button>
+                          </div>
                         </div>
 
                         <div className="space-y-2">
@@ -958,18 +973,28 @@ export default function Home() {
                             <p className="text-sm italic text-slate-400">No one signed up yet.</p>
                           ) : (
                             <ul className="flex flex-wrap gap-2">
-                              {daySignups.map((s) => (
-                                <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                  <span>😊 {s.user_name}</span>
-                                  <button
-                                    onClick={() => handleRemoveSnackSignup(s.id)}
-                                    className="text-slate-400 hover:text-red-500 font-bold ml-1"
-                                    title="Remove sign-up"
+                              {daySignups.map((s) => {
+                                const isFunds = s.user_name.toLowerCase() === 'team funds';
+                                return (
+                                  <li
+                                    key={s.id}
+                                    className={`border text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm font-medium ${
+                                      isFunds
+                                        ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                        : 'bg-white border-slate-200 text-slate-700'
+                                    }`}
                                   >
-                                    ×
-                                  </button>
-                                </li>
-                              ))}
+                                    <span>{isFunds ? '💰 Team Funds' : `😊 ${s.user_name}`}</span>
+                                    <button
+                                      onClick={() => handleRemoveSnackSignup(s.id)}
+                                      className="text-slate-400 hover:text-red-500 font-bold ml-1"
+                                      title="Remove sign-up"
+                                    >
+                                      ×
+                                    </button>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           )}
                         </div>
@@ -1012,7 +1037,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* CALENDAR DATE PICKERS */}
               <div className="space-y-2">
                 <label className="block font-semibold text-slate-700">Meeting Dates (Calendar Picker)</label>
 
@@ -1047,7 +1071,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* TIME RANGE SELECTORS */}
               <div className="grid grid-cols-2 gap-4 border-t pt-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Start Time</label>
