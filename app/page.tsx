@@ -44,7 +44,6 @@ interface HoveredSlotInfo {
 }
 
 export default function Home() {
-  // Navigation State: 3 distinct standalone views
   const [activeTab, setActiveTab] = useState<'availability' | 'snacks' | 'tournaments'>('availability');
 
   const [userName, setUserName] = useState('');
@@ -53,20 +52,16 @@ export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Team Roster State (14 Approved Members)
   const [teamRoster, setTeamRoster] = useState<TeamMember[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
 
-  // Admin Mode State
   const [isAdmin, setIsAdmin] = useState(false);
   const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123';
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
-  // Snack Sign-up States
   const [snackSignups, setSnackSignups] = useState<SnackSignup[]>([]);
   const [snackNameInput, setSnackNameInput] = useState('');
 
-  // Tournament Scheduling Tab States
   const [tournamentVotes, setTournamentVotes] = useState<TournamentVote[]>([]);
   const [mySel1, setMySel1] = useState('Euclid');
   const [mySel2, setMySel2] = useState('2026-12-12');
@@ -74,10 +69,8 @@ export default function Home() {
   const [myVolunteer, setMyVolunteer] = useState('');
   const [tourneySaved, setTourneySaved] = useState(false);
 
-  // Hover Inspector State
   const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
 
-  // Modal State for Sessions
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [modalLabel, setModalLabel] = useState('');
@@ -229,3 +222,719 @@ export default function Home() {
   };
 
   const fetchSnackSignups = async () => {
+    const { data } = await supabase.from('snack_signups').select('*').eq('poll_id', DEFAULT_POLL_ID);
+    if (data) setSnackSignups(data);
+  };
+
+  const fetchTournamentVotes = async () => {
+    const { data } = await supabase.from('tournament_votes').select('*').eq('poll_id', DEFAULT_POLL_ID);
+    if (data) setTournamentVotes(data);
+  };
+
+  const handleAdminToggle = () => {
+    if (isAdmin) {
+      setIsAdmin(false);
+      localStorage.removeItem('is_team_admin');
+      setStatusFilter('active');
+    } else {
+      const code = prompt('Enter Admin Passcode:');
+      if (code === ADMIN_PASSCODE) {
+        setIsAdmin(true);
+        localStorage.setItem('is_team_admin', 'true');
+      } else if (code !== null) {
+        alert('Incorrect admin passcode.');
+      }
+    }
+  };
+
+  const handleNameChange = (val: string) => {
+    setUserName(val);
+    setSnackNameInput(val);
+    setIsSubmitted(false);
+    setTourneySaved(false);
+  };
+
+  const handleSaveAvailability = async () => {
+    if (!userName.trim() || !isNameVerified) {
+      alert('Please select a verified roster name.');
+      return;
+    }
+    const matched = teamRoster.find((m) => m.name.toLowerCase() === userName.trim().toLowerCase());
+    const formattedName = matched ? matched.name : userName.trim();
+
+    await supabase.from('availabilities').delete().eq('poll_id', DEFAULT_POLL_ID).ilike('user_name', formattedName);
+
+    const rowsToInsert = selectedSlots.map((slot) => ({
+      poll_id: DEFAULT_POLL_ID,
+      user_name: formattedName,
+      slot_time: slot.toISOString(),
+    }));
+
+    if (rowsToInsert.length > 0) {
+      const { error } = await supabase.from('availabilities').insert(rowsToInsert);
+      if (error) {
+        alert(`Error saving: ${error.message}`);
+        return;
+      }
+    }
+    setIsSubmitted(true);
+    await fetchAvailabilities();
+  };
+
+  const handleSaveTournamentVote = async () => {
+    if (!userName.trim() || !isNameVerified) {
+      alert('Please select your verified name in the top bar before submitting.');
+      return;
+    }
+
+    const matched = teamRoster.find((m) => m.name.toLowerCase() === userName.trim().toLowerCase());
+    const formattedName = matched ? matched.name : userName.trim();
+
+    await supabase.from('tournament_votes').delete().eq('poll_id', DEFAULT_POLL_ID).ilike('user_name', formattedName);
+
+    const { error } = await supabase.from('tournament_votes').insert([
+      {
+        poll_id: DEFAULT_POLL_ID,
+        user_name: formattedName,
+        selection_1: mySel1,
+        selection_2: mySel2,
+        selection_3: mySel3,
+        volunteer_note: myVolunteer.trim(),
+      },
+    ]);
+
+    if (error) {
+      alert(`Error recording vote: ${error.message}`);
+      return;
+    }
+
+    setTourneySaved(true);
+    await fetchTournamentVotes();
+  };
+
+  const handleAddSnackSignup = async (sessionId: string, dateStr: string, customName?: string) => {
+    const isTeamFunds = customName === 'Team Funds';
+    const nameToSign = isTeamFunds ? 'Team Funds' : snackNameInput.trim();
+
+    if (!isTeamFunds) {
+      if (!nameToSign) {
+        alert('Please enter your name first.');
+        return;
+      }
+      if (!isNameVerified) {
+        alert('Your name was not found on the team roster.');
+        return;
+      }
+    }
+
+    let formattedName = nameToSign;
+    if (!isTeamFunds) {
+      const matched = teamRoster.find((m) => m.name.toLowerCase() === nameToSign.toLowerCase());
+      formattedName = matched ? matched.name : nameToSign;
+    }
+
+    const exists = snackSignups.some(
+      (s) =>
+        (s.session_id === sessionId || (s as any).weekend_id === sessionId) &&
+        (s.date_str === dateStr || (s as any).day_of_week === dateStr) &&
+        s.user_name.toLowerCase() === formattedName.toLowerCase()
+    );
+
+    if (exists) {
+      alert(`${formattedName} is already listed for snacks on this date!`);
+      return;
+    }
+
+    const { error } = await supabase.from('snack_signups').insert([
+      {
+        poll_id: DEFAULT_POLL_ID,
+        session_id: sessionId,
+        weekend_id: sessionId,
+        day_of_week: dateStr,
+        date_str: dateStr,
+        user_name: formattedName,
+      },
+    ]);
+
+    if (error) alert(error.message);
+    await fetchSnackSignups();
+  };
+
+  const handleRemoveSnackSignup = async (id: string) => {
+    await supabase.from('snack_signups').delete().eq('id', id);
+    await fetchSnackSignups();
+  };
+
+  const handleToggleActive = async (session: Session) => {
+    if (!isAdmin) return;
+    const newStatus = !session.is_active;
+    await supabase.from('session_config').update({ is_active: newStatus }).eq('id', session.id);
+    await fetchSessions();
+  };
+
+  const handleMoveSession = async (index: number, direction: 'up' | 'down') => {
+    if (!isAdmin) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= filteredSessions.length) return;
+    const currentSession = filteredSessions[index];
+    const targetSession = filteredSessions[targetIndex];
+
+    await supabase.from('session_config').update({ display_order: targetSession.display_order }).eq('id', currentSession.id);
+    await supabase.from('session_config').update({ display_order: currentSession.display_order }).eq('id', targetSession.id);
+    await fetchSessions();
+  };
+
+  const openAddModal = () => {
+    if (!isAdmin) return;
+    setEditingSessionId(null);
+    setModalLabel('');
+    setModalDates(['']);
+    setModalStartHour(10);
+    setModalEndHour(19);
+    setShowModal(true);
+  };
+
+  const openEditModal = (session: Session) => {
+    if (!isAdmin) return;
+    setEditingSessionId(session.id);
+    setModalLabel(session.label);
+    setModalDates(session.dates.length > 0 ? session.dates : ['']);
+    setModalStartHour(session.start_hour);
+    setModalEndHour(session.end_hour);
+    setShowModal(true);
+  };
+
+  const addDateField = () => {
+    if (modalDates.length > 0) {
+      const last = modalDates[modalDates.length - 1];
+      if (last && last.trim() !== '') {
+        const [y, m, d] = last.split('-').map(Number);
+        const next = new Date(y, m - 1, d + 1);
+        const str = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+        setModalDates([...modalDates, str]);
+        return;
+      }
+    }
+    setModalDates([...modalDates, '']);
+  };
+
+  const handleSaveSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    const validDates = modalDates.filter((d) => d.trim() !== '');
+    if (!modalLabel.trim() || validDates.length === 0) return;
+
+    if (editingSessionId) {
+      await supabase
+        .from('session_config')
+        .update({
+          label: modalLabel.trim(),
+          dates: validDates,
+          start_hour: Number(modalStartHour),
+          end_hour: Number(modalEndHour),
+        })
+        .eq('id', editingSessionId);
+    } else {
+      await supabase.from('session_config').insert([
+        {
+          poll_id: DEFAULT_POLL_ID,
+          label: modalLabel.trim(),
+          dates: validDates,
+          start_hour: Number(modalStartHour),
+          end_hour: Number(modalEndHour),
+          display_order: sessions.length + 1,
+          is_active: true,
+        },
+      ]);
+    }
+    setShowModal(false);
+    await fetchSessions();
+  };
+
+  const filteredSessions = sessions.filter((s) => {
+    if (!isAdmin) return s.is_active;
+    if (statusFilter === 'active') return s.is_active;
+    if (statusFilter === 'inactive') return !s.is_active;
+    return true;
+  });
+
+  const slotUserMap = new Map<string, string[]>();
+  allAvailabilities.forEach((item) => {
+    const key = getSlotKey(item.slot_time);
+    const existing = slotUserMap.get(key) || [];
+    if (!existing.includes(item.user_name)) slotUserMap.set(key, [...existing, item.user_name]);
+  });
+
+  const generateTimeSlots = (startH: number, endH: number) => {
+    const slots = [];
+    for (let h = startH; h < endH; h++) {
+      const p = h >= 12 ? 'pm' : 'am';
+      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      slots.push({ hour: h, minute: 0, label: `${dh}:00${p}` });
+      slots.push({ hour: h, minute: 30, label: `${dh}:30${p}` });
+    }
+    return slots;
+  };
+
+  return (
+    <main className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <header className="border-b pb-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Team Planner</h1>
+            <p className="text-slate-600">
+              Meeting availability, snack coordination, and tournament selection tracks.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleAdminToggle}
+              className={`text-xs px-3 py-2 rounded-lg font-semibold border transition ${
+                isAdmin
+                  ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              {isAdmin ? '🔒 Exit Admin Mode' : '🔑 Coach / Admin Access'}
+            </button>
+            {isAdmin && activeTab === 'availability' && (
+              <button
+                onClick={openAddModal}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5"
+              >
+                <span>➕</span> Add Meeting Session
+              </button>
+            )}
+          </div>
+        </header>
+
+        <div className="flex flex-wrap justify-between items-center border-b border-slate-200 gap-4">
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab('availability')}
+              className={`py-3 px-6 font-semibold border-b-2 text-sm transition-colors ${
+                activeTab === 'availability'
+                  ? 'border-green-600 text-green-700 bg-white rounded-t-lg shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              📅 Availability Grid
+            </button>
+            <button
+              onClick={() => setActiveTab('snacks')}
+              className={`py-3 px-6 font-semibold border-b-2 text-sm transition-colors ${
+                activeTab === 'snacks'
+                  ? 'border-green-600 text-green-700 bg-white rounded-t-lg shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              🍕 Snack Sign-up
+            </button>
+            <button
+              onClick={() => setActiveTab('tournaments')}
+              className={`py-3 px-6 font-semibold border-b-2 text-sm transition-colors ${
+                activeTab === 'tournaments'
+                  ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              🏆 Tournament Schedule
+            </button>
+          </div>
+
+          {isAdmin && activeTab === 'availability' && (
+            <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-lg text-xs font-medium">
+              <button
+                onClick={() => setStatusFilter('active')}
+                className={`px-3 py-1.5 rounded-md transition ${
+                  statusFilter === 'active' ? 'bg-white text-slate-800 shadow-sm font-bold' : 'text-slate-600'
+                }`}
+              >
+                🟢 Active ({sessions.filter((s) => s.is_active).length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('inactive')}
+                className={`px-3 py-1.5 rounded-md transition ${
+                  statusFilter === 'inactive' ? 'bg-white text-slate-800 shadow-sm font-bold' : 'text-slate-600'
+                }`}
+              >
+                ⚪ Inactive ({sessions.filter((s) => !s.is_active).length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-md transition ${
+                  statusFilter === 'all' ? 'bg-white text-slate-800 shadow-sm font-bold' : 'text-slate-600'
+                }`}
+              >
+                📂 All ({sessions.length})
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow-sm border space-y-2 sticky top-4 z-10">
+          <div className="flex flex-wrap gap-4 items-center">
+            <label className="font-semibold text-slate-700">Your Name:</label>
+            <div className="relative flex-1 max-w-xs">
+              <input
+                type="text"
+                list="team-roster-list"
+                placeholder="Select or type your name..."
+                value={userName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                className="w-full border px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              <datalist id="team-roster-list">
+                {teamRoster.map((m) => (
+                  <option key={m.id} value={m.name} />
+                ))}
+              </datalist>
+            </div>
+
+            {userName.trim() !== '' && (
+              <div>
+                {isNameVerified ? (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    ✓ Verified Team Member
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                    ⚠️ Name not on roster
+                  </span>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'availability' && (
+              <>
+                <button
+                  onClick={handleSaveAvailability}
+                  disabled={!isNameVerified}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-medium px-4 py-1.5 rounded-md transition text-sm ml-auto"
+                >
+                  Save My Availability
+                </button>
+                {isSubmitted && <span className="text-sm text-green-600 font-medium">✓ Saved!</span>}
+              </>
+            )}
+          </div>
+        </div>
+
+        {isAdmin && (
+          <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-lg space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">
+              ⚙️ Admin: Manage Approved Team Roster ({teamRoster.length} Members)
+            </h3>
+            <form onSubmit={handleAddRosterMember} className="flex gap-2 max-w-md">
+              <input
+                type="text"
+                placeholder="New member full name..."
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                className="border px-3 py-1 rounded-md text-xs flex-1 bg-white"
+              />
+              <button
+                type="submit"
+                className="bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs px-3 py-1 rounded-md transition"
+              >
+                + Add Member
+              </button>
+            </form>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {teamRoster.map((m) => (
+                <span
+                  key={m.id}
+                  className="bg-white border text-slate-700 text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>{m.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRosterMember(m.id)}
+                    className="text-slate-400 hover:text-red-600 font-bold ml-1 text-xs"
+                    title="Remove from roster"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'availability' && (
+          <div className="space-y-8">
+            {filteredSessions.length === 0 ? (
+              <div className="bg-white p-12 text-center rounded-lg border text-slate-500 italic">
+                No active meeting sessions found.
+              </div>
+            ) : (
+              filteredSessions.map((session, sessionIdx) => {
+                const sessionDates = session.dates.map((dStr) => parseLocalDate(dStr));
+                const firstDate = sessionDates[0] || new Date();
+                const numDays = sessionDates.length;
+                const timeSlots = generateTimeSlots(session.start_hour, session.end_hour);
+
+                const respondents = Array.from(
+                  new Set(
+                    allAvailabilities
+                      .filter((item) => {
+                        const sd = new Date(item.slot_time);
+                        return sessionDates.some(
+                          (d) => d.getFullYear() === sd.getFullYear() && d.getMonth() === sd.getMonth() && d.getDate() === sd.getDate()
+                        );
+                      })
+                      .map((item) => item.user_name.trim())
+                  )
+                );
+
+                return (
+                  <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+                    <div className="flex justify-between items-center border-b pb-2">
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleToggleActive(session)}
+                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border transition ${
+                              session.is_active
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-slate-200 text-slate-600 border-slate-300 hover:bg-slate-300'
+                            }`}
+                          >
+                            {session.is_active ? '🟢 Active' : '⚪ Inactive'}
+                          </button>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-2">
+                          <button
+                            disabled={sessionIdx === 0}
+                            onClick={() => handleMoveSession(sessionIdx, 'up')}
+                            className="text-xs border px-2 py-1 rounded bg-slate-50 disabled:opacity-30"
+                          >
+                            ⬆️ Up
+                          </button>
+                          <button
+                            disabled={sessionIdx === filteredSessions.length - 1}
+                            onClick={() => handleMoveSession(sessionIdx, 'down')}
+                            className="text-xs border px-2 py-1 rounded bg-slate-50 disabled:opacity-30"
+                          >
+                            ⬇️ Down
+                          </button>
+                          <button
+                            onClick={() => openEditModal(session)}
+                            className="text-xs text-blue-600 border px-2.5 py-1 rounded bg-slate-50"
+                          >
+                            ✏️ Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
+                        <ScheduleSelector
+                          startDate={firstDate}
+                          numDays={numDays}
+                          minTime={session.start_hour}
+                          maxTime={session.end_hour}
+                          hourlyChunks={2}
+                          timeFormat="h:mm a"
+                          dateFormat="M/D"
+                          selection={selectedSlots}
+                          onChange={setSelectedSlots}
+                          selectedColor="#22c55e"
+                          unselectedColor="#f1f5f9"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-baseline">
+                          <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
+                          <span className="text-xs text-slate-500">Respondents: {respondents.length}</span>
+                        </div>
+
+                        {hoveredSlot?.sessionId === session.id ? (
+                          <div className="bg-slate-900 text-white p-3 rounded-lg text-xs space-y-1">
+                            <div className="font-bold border-b border-slate-700 pb-1 flex justify-between">
+                              <span>📅 {hoveredSlot.dayLabel} @ {hoveredSlot.timeLabel}</span>
+                              <span>{hoveredSlot.available.length}/{respondents.length} Free</span>
+                            </div>
+                            <div className="text-emerald-400">✅ Free: {hoveredSlot.available.join(', ') || 'None'}</div>
+                            <div className="text-rose-400">❌ Busy: {hoveredSlot.unavailable.join(', ') || 'None'}</div>
+                          </div>
+                        ) : (
+                          <div className="bg-slate-100 p-3 rounded-lg text-xs text-slate-500 italic text-center border border-dashed">
+                            Hover over any time slot below to inspect attendance.
+                          </div>
+                        )}
+
+                        <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHoveredSlot(null)}>
+                          <div
+                            className="grid text-center font-semibold text-slate-600 border-b pb-2 mb-1"
+                            style={{ gridTemplateColumns: `60px repeat(${sessionDates.length}, minmax(0, 1fr))` }}
+                          >
+                            <div>Time</div>
+                            {sessionDates.map((d, idx) => (
+                              <div key={idx}>{formatDateShort(d)}</div>
+                            ))}
+                          </div>
+                          <div className="space-y-1">
+                            {timeSlots.map((slot, i) => (
+                              <div
+                                key={i}
+                                className="grid gap-1 items-center h-6"
+                                style={{ gridTemplateColumns: `60px repeat(${sessionDates.length}, minmax(0, 1fr))` }}
+                              >
+                                <div className="text-slate-400 text-right pr-2 text-[10px]">{slot.label}</div>
+                                {sessionDates.map((d, dIdx) => {
+                                  const sd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), slot.hour, slot.minute);
+                                  const users = slotUserMap.get(getSlotKey(sd)) || [];
+                                  const unavail = respondents.filter((u) => !users.includes(u));
+                                  const op = respondents.length > 0 ? users.length / respondents.length : 0;
+                                  return (
+                                    <div
+                                      key={dIdx}
+                                      onMouseEnter={() =>
+                                        setHoveredSlot({
+                                          sessionId: session.id,
+                                          dayLabel: formatDateShort(d),
+                                          timeLabel: slot.label,
+                                          available: users,
+                                          unavailable: unavail,
+                                        })
+                                      }
+                                      style={{
+                                        backgroundColor: users.length > 0 ? `rgba(34, 197, 94, ${Math.max(op, 0.3)})` : '#f1f5f9',
+                                      }}
+                                      className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer"
+                                    >
+                                      {users.length > 0 ? users.length : ''}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab === 'snacks' && (
+          <div className="space-y-8">
+            {filteredSessions.map((session) => (
+              <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
+                <h2 className="text-xl font-bold text-slate-800 border-b pb-2">{session.label}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {session.dates.map((dateStr, idx) => {
+                    const d = parseLocalDate(dateStr);
+                    const daySignups = snackSignups.filter(
+                      (s) =>
+                        (s.session_id === session.id || (s as any).weekend_id === session.id) &&
+                        (s.date_str === dateStr || (s as any).day_of_week === dateStr)
+                    );
+                    return (
+                      <div key={idx} className="border rounded-lg p-5 bg-slate-50 space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2">
+                          <h3 className="font-semibold text-slate-700">{formatDateShort(d)} Snacks</h3>
+                          <button
+                            onClick={() => handleAddSnackSignup(session.id, dateStr)}
+                            disabled={!isNameVerified}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded transition"
+                          >
+                            + Sign Me Up
+                          </button>
+                        </div>
+                        <ul className="flex flex-wrap gap-2">
+                          {daySignups.length === 0 ? (
+                            <p className="text-sm italic text-slate-400">No one signed up yet.</p>
+                          ) : (
+                            daySignups.map((s) => {
+                              const isFunds = s.user_name.toLowerCase() === 'team funds';
+                              return (
+                                <li
+                                  key={s.id}
+                                  className={`border text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm font-medium ${
+                                    isFunds
+                                      ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                      : 'bg-white border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  <span>{isFunds ? '💰 Team Funds' : `😊 ${s.user_name}`}</span>
+                                  <button
+                                    onClick={() => handleRemoveSnackSignup(s.id)}
+                                    className="text-slate-400 hover:text-red-500 font-bold ml-1"
+                                  >
+                                    ×
+                                  </button>
+                                </li>
+                              );
+                            })
+                          )}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'tournaments' && (
+          <div className="space-y-8">
+            <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-6 rounded-xl shadow space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <span>📋</span> Team Tournament Requirements & Pit Notice
+                </h2>
+                <span className="text-xs bg-amber-400 text-slate-900 font-bold px-2.5 py-1 rounded-full">
+                  Link Opens Oct 23
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-200">
+                <ul className="space-y-1.5 list-disc list-inside">
+                  <li><strong>Volunteers:</strong> Teams must provide 1–2 volunteers at every event participated in.</li>
+                  <li><strong>Pit Area:</strong> Outside pit space approximately 10' x 10'.</li>
+                  <li><strong>Equipment:</strong> Teams are required to bring their own pop-up tent and table.</li>
+                </ul>
+                <div className="bg-white/10 p-3 rounded-lg border border-white/20">
+                  <span className="font-bold text-amber-300 block mb-1">⚡ Pit Power Policy:</span>
+                  <p>
+                    Power will <strong>NOT</strong> be provided directly to your pits. A central event charging station will be available with one outlet per team, but bringing battery power banks for your pit is strongly advised.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-6">
+              <div className="border-b pb-3">
+                <h3 className="text-lg font-bold text-slate-800">
+                  Select Your Preferred Tournament Schedule Track
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Submit family availability so coaches can select the best schedule link on October 23rd.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-bold text-slate-800 block">
+                    1. Selection #1: League Track (Week #1 & Week #4 are Linked)
+                  </label>
+                  <div className="mt-1 bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2">
+                    <span className="text-base">⚠️</span>
+                    <p>
+                      <strong>Important:</strong> Selection #1 determines <strong>both</strong> your <strong>Week #1 Kickoff</strong> and your <strong>Week #4 League Championship</strong> together. You cannot split these dates—picking a track commits the team to that specific pair!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt
