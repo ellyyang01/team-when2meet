@@ -26,660 +26,346 @@ interface TeamMember {
   name: string;
 }
 
-interface HoveredSlotInfo {
-  sessionId: string;
-  dayLabel: string;
-  timeLabel: string;
-  available: string[];
-  unavailable: string[];
+interface TournamentVote {
+  id: string;
+  user_name: string;
+  selection_1: string[] | null;
+  selection_2: string[] | null;
+  selection_3: string[] | null;
+  volunteer_note: string | null;
 }
 
+const POLL_ID = '00000000-0000-0000-0000-000000000001';
+
+const TRACKS = [
+  { id: 'Euclid', name: 'Euclid Track', w1: 'Sat 11/21/2026', w4: 'Sat 2/20/2027', badge: 'All Saturdays' },
+  { id: 'Gauss', name: 'Gauss Track', w1: 'Sun 11/22/2026', w4: 'Sat 2/20/2027', badge: 'Sun then Sat' },
+  { id: 'Turing', name: 'Turing Track', w1: 'Sat 11/21/2026', w4: 'Sun 2/21/2027', badge: 'Sat then Sun' },
+  { id: 'Descartes', name: 'Descartes Track', w1: 'Sun 11/22/2026', w4: 'Sun 2/21/2027', badge: 'All Sundays' },
+];
+
+const W2_OPTS = [
+  { id: '2026-12-12', label: 'Sat, Dec 12, 2026' },
+  { id: '2026-12-13', label: 'Sun, Dec 13, 2026' },
+];
+
+const W3_OPTS = [
+  { id: '2027-01-23', label: 'Sat, Jan 23, 2027' },
+  { id: '2027-01-24', label: 'Sun, Jan 24, 2027' },
+];
+
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'availability' | 'snacks'>('availability');
+  const [tab, setTab] = useState<'availability' | 'snacks' | 'tournaments'>('availability');
   const [userName, setUserName] = useState('');
   const [selectedSlots, setSelectedSlots] = useState<Date[]>([]);
-  const [allAvailabilities, setAllAvailabilities] = useState<any[]>([]);
+  const [availabilities, setAvailabilities] = useState<any[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
-  // TEAM ROSTER STATE
-  const [teamRoster, setTeamRoster] = useState<TeamMember[]>([]);
-  const [newMemberName, setNewMemberName] = useState('');
-
-  // ADMIN MODE STATE
+  const [roster, setRoster] = useState<TeamMember[]>([]);
+  const [newMember, setNewMember] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
-  const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123';
+  const [filter, setFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
-  // Global Session Status Filter ('active' | 'inactive' | 'all')
-  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
+  const [snacks, setSnacks] = useState<SnackSignup[]>([]);
+  const [votes, setVotes] = useState<TournamentVote[]>([]);
+  const [sel1, setSel1] = useState<string[]>([]);
+  const [sel2, setSel2] = useState<string[]>([]);
+  const [sel3, setSel3] = useState<string[]>([]);
+  const [volNote, setVolNote] = useState('');
+  const [voteSaved, setVoteSaved] = useState(false);
 
-  // Snack Sign-up States
-  const [snackSignups, setSnackSignups] = useState<SnackSignup[]>([]);
-  const [snackNameInput, setSnackNameInput] = useState('');
+  const [hover, setHover] = useState<{ label: string; free: string[]; busy: string[] } | null>(null);
 
-  // Hover Inspector State
-  const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
+  const [modal, setModal] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [mLabel, setMLabel] = useState('');
+  const [mDates, setMDates] = useState<string[]>(['']);
+  const [mStart, setMStart] = useState(10);
+  const [mEnd, setMEnd] = useState(19);
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [modalLabel, setModalLabel] = useState('');
-  const [modalDates, setModalDates] = useState<string[]>(['']);
-  const [modalStartHour, setModalStartHour] = useState(10);
-  const [modalEndHour, setModalEndHour] = useState(19);
-
-  const DEFAULT_POLL_ID = '00000000-0000-0000-0000-000000000001';
-
-  const getSlotKey = (d: Date | string) => {
-    const date = new Date(d);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}-${hours}:${minutes}`;
+  const parseDate = (s: string) => {
+    const [y, m, d] = s.split('T')[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
   };
 
-  const parseLocalDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
-    return new Date(year, month - 1, day, 0, 0, 0);
+  const fmtDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()} (${d.toLocaleDateString('en-US', { weekday: 'short' })})`;
+
+  const slotKey = (d: Date | string) => {
+    const dt = new Date(d);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
   };
 
-  const formatDateShort = (d: Date) => {
-    const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${d.getMonth() + 1}/${d.getDate()} (${dayName})`;
-  };
+  const toggle = (arr: string[], val: string) =>
+    arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
 
   useEffect(() => {
-    fetchSessions();
-    fetchAvailabilities();
-    fetchSnackSignups();
-    fetchTeamRoster();
-
-    const savedAdmin = localStorage.getItem('is_team_admin');
-    if (savedAdmin === 'true') {
-      setIsAdmin(true);
-    }
+    loadAll();
+    if (localStorage.getItem('is_team_admin') === 'true') setIsAdmin(true);
   }, []);
+
+  const loadAll = async () => {
+    const [sRes, aRes, snRes, rRes, vRes] = await Promise.all([
+      supabase.from('session_config').select('*').order('display_order', { ascending: true }),
+      supabase.from('availabilities').select('*').eq('poll_id', POLL_ID),
+      supabase.from('snack_signups').select('*').eq('poll_id', POLL_ID),
+      supabase.from('team_roster').select('*').order('name', { ascending: true }),
+      supabase.from('tournament_votes').select('*').eq('poll_id', POLL_ID),
+    ]);
+
+    if (sRes.data) setSessions(sRes.data);
+    if (aRes.data) setAvailabilities(aRes.data);
+    if (snRes.data) setSnacks(snRes.data);
+    if (rRes.data && rRes.data.length > 0) {
+      setRoster(rRes.data);
+    } else {
+      setRoster([
+        'Elaine', 'Emma', 'Ellie', 'Aranya', 'Mananya',
+        'Joseph', 'Jonah', 'Jacob', 'Rohan', 'Thomas',
+        'Max', 'Vivian', 'Emily', 'Ethan',
+      ].map((n, i) => ({ id: String(i + 1), name: n })));
+    }
+    if (vRes.data) setVotes(vRes.data);
+  };
 
   useEffect(() => {
     if (!userName.trim()) {
       setSelectedSlots([]);
+      setSel1([]);
+      setSel2([]);
+      setSel3([]);
+      setVolNote('');
       return;
     }
+    const clean = userName.trim().toLowerCase();
+    const userSlots = availabilities.filter((a) => a.user_name.trim().toLowerCase() === clean);
+    setSelectedSlots(userSlots.map((a) => new Date(a.slot_time)));
 
-    const userEntries = allAvailabilities.filter(
-      (item) => item.user_name.trim().toLowerCase() === userName.trim().toLowerCase()
-    );
-
-    const userDates = userEntries.map((item) => new Date(item.slot_time));
-    setSelectedSlots(userDates);
-  }, [userName, allAvailabilities]);
-
-  // Case-insensitive team roster check
-  const isNameVerified = teamRoster.some(
-    (member) => member.name.trim().toLowerCase() === userName.trim().toLowerCase()
-  );
-
-  const fetchTeamRoster = async () => {
-    const { data } = await supabase.from('team_roster').select('*').order('name', { ascending: true });
-    if (data && data.length > 0) {
-      setTeamRoster(data);
+    const vote = votes.find((v) => v.user_name.trim().toLowerCase() === clean);
+    if (vote) {
+      setSel1(Array.isArray(vote.selection_1) ? vote.selection_1 : []);
+      setSel2(Array.isArray(vote.selection_2) ? vote.selection_2 : []);
+      setSel3(Array.isArray(vote.selection_3) ? vote.selection_3 : []);
+      setVolNote(vote.volunteer_note || '');
     } else {
-      // Fallback roster with all 14 members
-      const defaultNames = [
-        'Elaine', 'Emma', 'Ellie', 'Aranya', 'Mananya',
-        'Joseph', 'Jonah', 'Jacob', 'Rohan', 'Thomas',
-        'Max', 'Vivian', 'Emily', 'Ethan'
-      ];
-      setTeamRoster(defaultNames.map((name, idx) => ({ id: String(idx + 1), name })));
+      setSel1([]);
+      setSel2([]);
+      setSel3([]);
+      setVolNote('');
     }
+  }, [userName, availabilities, votes]);
+
+  const verifiedMember = roster.find((m) => m.name.toLowerCase() === userName.trim().toLowerCase());
+  const isVerified = Boolean(verifiedMember);
+  const activeName = verifiedMember ? verifiedMember.name : userName.trim();
+
+  const handleSaveAvail = async () => {
+    if (!isVerified) return alert('Select your verified roster name first.');
+    await supabase.from('availabilities').delete().eq('poll_id', POLL_ID).ilike('user_name', activeName);
+    if (selectedSlots.length > 0) {
+      await supabase.from('availabilities').insert(
+        selectedSlots.map((s) => ({ poll_id: POLL_ID, user_name: activeName, slot_time: s.toISOString() }))
+      );
+    }
+    setIsSaved(true);
+    const { data } = await supabase.from('availabilities').select('*').eq('poll_id', POLL_ID);
+    if (data) setAvailabilities(data);
   };
 
-  const handleAddRosterMember = async (e: React.FormEvent) => {
+  const handleSaveVote = async () => {
+    if (!isVerified) return alert('Select your verified roster name first.');
+    if (!sel1.length && !sel2.length && !sel3.length && !volNote.trim()) {
+      return alert('Select at least one tournament preference or enter a volunteer note.');
+    }
+    const prev = votes.find((v) => v.user_name.trim().toLowerCase() === activeName.toLowerCase());
+    await supabase.from('tournament_votes').delete().eq('poll_id', POLL_ID).ilike('user_name', activeName);
+
+    const { error } = await supabase.from('tournament_votes').insert([{
+      poll_id: POLL_ID,
+      user_name: activeName,
+      selection_1: sel1.length ? sel1 : prev?.selection_1 || [],
+      selection_2: sel2.length ? sel2 : prev?.selection_2 || [],
+      selection_3: sel3.length ? sel3 : prev?.selection_3 || [],
+      volunteer_note: volNote.trim() || prev?.volunteer_note || '',
+    }]);
+
+    if (error) alert(`Error saving vote: ${error.message}`);
+    setVoteSaved(true);
+    const { data } = await supabase.from('tournament_votes').select('*').eq('poll_id', POLL_ID);
+    if (data) setVotes(data);
+  };
+
+  const handleSnack = async (sid: string, date: string, funds?: boolean) => {
+    const targetName = funds ? 'Team Funds' : activeName;
+    if (!funds && !isVerified) return alert('Select your verified roster name first.');
+    const exists = snacks.some(
+      (s) => (s.session_id === sid || (s as any).weekend_id === sid) &&
+             (s.date_str === date || (s as any).day_of_week === date) &&
+             s.user_name.toLowerCase() === targetName.toLowerCase()
+    );
+    if (exists) return alert(`${targetName} is already signed up!`);
+
+    await supabase.from('snack_signups').insert([{
+      poll_id: POLL_ID, session_id: sid, weekend_id: sid, date_str: date, day_of_week: date, user_name: targetName
+    }]);
+    const { data } = await supabase.from('snack_signups').select('*').eq('poll_id', POLL_ID);
+    if (data) setSnacks(data);
+  };
+
+  const removeSnack = async (id: string) => {
+    await supabase.from('snack_signups').delete().eq('id', id);
+    setSnacks(snacks.filter((s) => s.id !== id));
+  };
+
+  const addRoster = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMemberName.trim()) return;
-
-    const formattedName = newMemberName.trim().charAt(0).toUpperCase() + newMemberName.trim().slice(1);
-
-    const { error } = await supabase.from('team_roster').insert([{ name: formattedName }]);
-
-    if (error) {
-      alert(`Error adding member: ${error.message}`);
-      return;
-    }
-
-    setNewMemberName('');
-    await fetchTeamRoster();
+    if (!newMember.trim()) return;
+    const n = newMember.trim().charAt(0).toUpperCase() + newMember.trim().slice(1);
+    await supabase.from('team_roster').insert([{ name: n }]);
+    setNewMember('');
+    const { data } = await supabase.from('team_roster').select('*').order('name', { ascending: true });
+    if (data) setRoster(data);
   };
 
-  const handleRemoveRosterMember = async (id: string) => {
-    const { error } = await supabase.from('team_roster').delete().eq('id', id);
-    if (error) {
-      alert(`Error removing member: ${error.message}`);
-      return;
-    }
-    await fetchTeamRoster();
+  const deleteRoster = async (id: string) => {
+    await supabase.from('team_roster').delete().eq('id', id);
+    setRoster(roster.filter((r) => r.id !== id));
   };
 
-  const handleAdminToggle = () => {
+  const toggleAdmin = () => {
     if (isAdmin) {
       setIsAdmin(false);
       localStorage.removeItem('is_team_admin');
-      setStatusFilter('active');
     } else {
       const code = prompt('Enter Admin Passcode:');
-      if (code === ADMIN_PASSCODE) {
+      if (code === (process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123')) {
         setIsAdmin(true);
         localStorage.setItem('is_team_admin', 'true');
       } else if (code !== null) {
-        alert('Incorrect admin passcode.');
+        alert('Incorrect passcode.');
       }
     }
   };
 
-  const handleNameChange = (val: string) => {
-    setUserName(val);
-    setSnackNameInput(val);
-    setIsSubmitted(false);
-  };
-
-  const fetchSessions = async () => {
-    const { data } = await supabase
-      .from('session_config')
-      .select('*')
-      .order('display_order', { ascending: true });
-
-    if (data && data.length > 0) {
-      setSessions(data);
-    } else {
-      setSessions([
-        {
-          id: '1',
-          label: 'Week 1: Aug 15 - Aug 16',
-          dates: ['2026-08-15', '2026-08-16'],
-          start_hour: 10,
-          end_hour: 19,
-          display_order: 1,
-          is_active: true,
-        },
-      ]);
-    }
-  };
-
-  const fetchAvailabilities = async () => {
-    const { data } = await supabase
-      .from('availabilities')
-      .select('*')
-      .eq('poll_id', DEFAULT_POLL_ID);
-
-    if (data) setAllAvailabilities(data);
-  };
-
-  const fetchSnackSignups = async () => {
-    const { data } = await supabase
-      .from('snack_signups')
-      .select('*')
-      .eq('poll_id', DEFAULT_POLL_ID);
-
-    if (data) setSnackSignups(data);
-  };
-
-  const handleSaveAvailability = async () => {
-    if (!userName.trim()) {
-      alert('Please enter your name first.');
-      return;
-    }
-
-    if (!isNameVerified) {
-      alert('Your name was not found on the team roster. Please select your name from the list or contact an admin.');
-      return;
-    }
-
-    const matchedMember = teamRoster.find(
-      (m) => m.name.toLowerCase() === userName.trim().toLowerCase()
-    );
-    const formattedName = matchedMember ? matchedMember.name : userName.trim();
-
-    await supabase
-      .from('availabilities')
-      .delete()
-      .eq('poll_id', DEFAULT_POLL_ID)
-      .ilike('user_name', formattedName);
-
-    const rowsToInsert = selectedSlots.map((slot) => ({
-      poll_id: DEFAULT_POLL_ID,
-      user_name: formattedName,
-      slot_time: slot.toISOString(),
-    }));
-
-    if (rowsToInsert.length > 0) {
-      const { error } = await supabase
-        .from('availabilities')
-        .insert(rowsToInsert);
-
-      if (error) {
-        alert(`Error saving: ${error.message}`);
-        return;
-      }
-    }
-
-    setIsSubmitted(true);
-    await fetchAvailabilities();
-  };
-
-  const handleToggleActive = async (session: Session) => {
-    if (!isAdmin) return;
-    const newStatus = !session.is_active;
-
-    setSessions((prev) =>
-      prev.map((s) => (s.id === session.id ? { ...s, is_active: newStatus } : s))
-    );
-
-    const { error } = await supabase
-      .from('session_config')
-      .update({ is_active: newStatus })
-      .eq('id', session.id);
-
-    if (error) {
-      alert(`Error updating session status: ${error.message}`);
-      await fetchSessions();
-    }
-  };
-
-  const handleMoveSession = async (index: number, direction: 'up' | 'down') => {
-    if (!isAdmin) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= filteredSessions.length) return;
-
-    const currentSession = filteredSessions[index];
-    const targetSession = filteredSessions[targetIndex];
-
-    const { error: err1 } = await supabase
-      .from('session_config')
-      .update({ display_order: targetSession.display_order })
-      .eq('id', currentSession.id);
-
-    const { error: err2 } = await supabase
-      .from('session_config')
-      .update({ display_order: currentSession.display_order })
-      .eq('id', targetSession.id);
-
-    if (err1 || err2) {
-      alert('Error reordering sessions.');
-    }
-
-    await fetchSessions();
-  };
-
-  const openAddModal = () => {
-    if (!isAdmin) return;
-    setEditingSessionId(null);
-    setModalLabel('');
-    setModalDates(['']);
-    setModalStartHour(10);
-    setModalEndHour(19);
-    setShowModal(true);
-  };
-
-  const openEditModal = (session: Session) => {
-    if (!isAdmin) return;
-    setEditingSessionId(session.id);
-    setModalLabel(session.label);
-    setModalDates(session.dates.length > 0 ? session.dates : ['']);
-    setModalStartHour(session.start_hour);
-    setModalEndHour(session.end_hour);
-    setShowModal(true);
-  };
-
-  const handleDateChange = (index: number, val: string) => {
-    const updated = [...modalDates];
-    updated[index] = val;
-    setModalDates(updated);
-  };
-
-  const addDateField = () => {
-    if (modalDates.length > 0) {
-      const lastDateVal = modalDates[modalDates.length - 1];
-      if (lastDateVal && lastDateVal.trim() !== '') {
-        const [year, month, day] = lastDateVal.split('-').map(Number);
-        const nextDate = new Date(year, month - 1, day + 1);
-
-        const nextYear = nextDate.getFullYear();
-        const nextMonth = String(nextDate.getMonth() + 1).padStart(2, '0');
-        const nextDay = String(nextDate.getDate()).padStart(2, '0');
-
-        const nextDateStr = `${nextYear}-${nextMonth}-${nextDay}`;
-        setModalDates([...modalDates, nextDateStr]);
-        return;
-      }
-    }
-
-    setModalDates([...modalDates, '']);
-  };
-
-  const removeDateField = (index: number) => {
-    if (modalDates.length === 1) return;
-    setModalDates(modalDates.filter((_, i) => i !== index));
-  };
-
-  const handleSaveSession = async (e: React.FormEvent) => {
+  const saveSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) return;
-
-    const validDates = modalDates.filter((d) => d.trim() !== '');
-
-    if (!modalLabel.trim() || validDates.length === 0) {
-      alert('Please provide a session title and select at least one date.');
-      return;
-    }
-
-    if (editingSessionId) {
-      const { error } = await supabase
-        .from('session_config')
-        .update({
-          label: modalLabel.trim(),
-          dates: validDates,
-          start_hour: Number(modalStartHour),
-          end_hour: Number(modalEndHour),
-        })
-        .eq('id', editingSessionId);
-
-      if (error) {
-        alert(`Error updating session: ${error.message}`);
-        return;
-      }
+    const dates = mDates.filter((d) => d.trim() !== '');
+    if (!mLabel.trim() || !dates.length) return;
+    if (editId) {
+      await supabase.from('session_config').update({ label: mLabel.trim(), dates, start_hour: mStart, end_hour: mEnd }).eq('id', editId);
     } else {
-      const { error } = await supabase.from('session_config').insert([
-        {
-          poll_id: DEFAULT_POLL_ID,
-          label: modalLabel.trim(),
-          dates: validDates,
-          start_hour: Number(modalStartHour),
-          end_hour: Number(modalEndHour),
-          display_order: sessions.length + 1,
-          is_active: true,
-        },
-      ]);
-
-      if (error) {
-        alert(`Error creating session: ${error.message}`);
-        return;
-      }
+      await supabase.from('session_config').insert([{ poll_id: POLL_ID, label: mLabel.trim(), dates, start_hour: mStart, end_hour: mEnd, display_order: sessions.length + 1, is_active: true }]);
     }
-
-    setShowModal(false);
-    await fetchSessions();
+    setModal(false);
+    const { data } = await supabase.from('session_config').select('*').order('display_order', { ascending: true });
+    if (data) setSessions(data);
   };
 
-  const handleAddSnackSignup = async (sessionId: string, dateStr: string) => {
-    const name = snackNameInput.trim();
-    if (!name) {
-      alert('Please enter your name first.');
-      return;
-    }
-
-    if (!isNameVerified) {
-      alert('Your name was not found on the team roster.');
-      return;
-    }
-
-    const matchedMember = teamRoster.find(
-      (m) => m.name.toLowerCase() === name.toLowerCase()
-    );
-    const formattedName = matchedMember ? matchedMember.name : name;
-
-    const alreadySignedUp = snackSignups.some(
-      (s) =>
-        (s.session_id === sessionId || (s as any).weekend_id === sessionId) &&
-        (s.date_str === dateStr || (s as any).day_of_week === dateStr) &&
-        s.user_name.toLowerCase() === formattedName.toLowerCase()
-    );
-
-    if (alreadySignedUp) {
-      alert(`${formattedName} is already signed up for snacks on this date!`);
-      return;
-    }
-
-    const { error } = await supabase.from('snack_signups').insert([
-      {
-        poll_id: DEFAULT_POLL_ID,
-        session_id: sessionId,
-        weekend_id: sessionId,
-        day_of_week: dateStr,
-        date_str: dateStr,
-        user_name: formattedName,
-      },
-    ]);
-
-    if (error) {
-      alert(`Error adding snack sign-up: ${error.message}`);
-      return;
-    }
-
-    await fetchSnackSignups();
-  };
-
-  const handleRemoveSnackSignup = async (id: string) => {
-    const { error } = await supabase.from('snack_signups').delete().eq('id', id);
-    if (error) {
-      alert(`Error removing sign-up: ${error.message}`);
-      return;
-    }
-    await fetchSnackSignups();
-  };
-
-  const filteredSessions = sessions.filter((session) => {
-    if (!isAdmin) return session.is_active;
-    if (statusFilter === 'active') return session.is_active;
-    if (statusFilter === 'inactive') return !session.is_active;
+  const filteredSessions = sessions.filter((s) => {
+    if (!isAdmin || filter === 'active') return s.is_active;
+    if (filter === 'inactive') return !s.is_active;
     return true;
   });
 
-  const slotUserMap = new Map<string, string[]>();
-  allAvailabilities.forEach((item) => {
-    const key = getSlotKey(item.slot_time);
-    const existing = slotUserMap.get(key) || [];
-    if (!existing.includes(item.user_name)) {
-      slotUserMap.set(key, [...existing, item.user_name]);
-    }
+  const slotMap = new Map<string, string[]>();
+  availabilities.forEach((a) => {
+    const k = slotKey(a.slot_time);
+    const curr = slotMap.get(k) || [];
+    if (!curr.includes(a.user_name)) slotMap.set(k, [...curr, a.user_name]);
   });
 
-  const generateTimeSlots = (startH: number, endH: number) => {
-    const slots: { hour: number; minute: number; label: string }[] = [];
-    for (let h = startH; h < endH; h++) {
-      const period = h >= 12 ? 'pm' : 'am';
-      const displayHour = h > 12 ? h - 12 : h === 0 ? 12 : h;
-
-      slots.push({ hour: h, minute: 0, label: `${displayHour}:00${period}` });
-      slots.push({ hour: h, minute: 30, label: `${displayHour}:30${period}` });
-    }
-    return slots;
-  };
-
   return (
-    <main className="min-h-screen bg-slate-50 p-8 font-sans">
+    <main className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
       <div className="max-w-6xl mx-auto space-y-6">
         <header className="border-b pb-4 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Team Planner</h1>
-            <p className="text-slate-600">
-              Coordinate team availability and snack sign-ups across custom meeting sessions.
-            </p>
+            <h1 className="text-2xl md:text-3xl font-bold">Team Planner</h1>
+            <p className="text-sm text-slate-500">Meetings, snack schedules, and tournament track coordination.</p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleAdminToggle}
-              className={`text-xs px-3 py-2 rounded-lg font-semibold border transition ${
-                isAdmin
-                  ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-                  : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-              }`}
-            >
-              {isAdmin ? '🔒 Exit Admin Mode' : '🔑 Coach / Admin Access'}
+          <div className="flex gap-2">
+            <button onClick={toggleAdmin} className={`text-xs px-3 py-1.5 rounded-lg border font-semibold ${isAdmin ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-white text-slate-600'}`}>
+              {isAdmin ? '🔒 Exit Admin' : '🔑 Coach Access'}
             </button>
-
-            {isAdmin && (
-              <button
-                onClick={openAddModal}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5"
-              >
-                <span>➕</span> Add Meeting Session
+            {isAdmin && tab === 'availability' && (
+              <button onClick={() => { setEditId(null); setMLabel(''); setMDates(['']); setModal(true); }} className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-700">
+                + Add Session
               </button>
             )}
           </div>
         </header>
 
-        {/* Tab Switcher & Status Filter Bar */}
-        <div className="flex flex-wrap justify-between items-center border-b border-slate-200 gap-4">
-          <div className="flex">
-            <button
-              onClick={() => setActiveTab('availability')}
-              className={`py-3 px-6 font-semibold border-b-2 transition-colors ${
-                activeTab === 'availability'
-                  ? 'border-green-600 text-green-700 bg-white rounded-t-lg'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              📅 Availability Grid
-            </button>
-            <button
-              onClick={() => setActiveTab('snacks')}
-              className={`py-3 px-6 font-semibold border-b-2 transition-colors ${
-                activeTab === 'snacks'
-                  ? 'border-green-600 text-green-700 bg-white rounded-t-lg'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              🍕 Snack Sign-up
-            </button>
+        {/* Tab Selector */}
+        <div className="flex justify-between items-center border-b border-slate-200">
+          <div className="flex space-x-1">
+            {[
+              { id: 'availability', label: '📅 Availability Grid' },
+              { id: 'snacks', label: '🍕 Snack Sign-up' },
+              { id: 'tournaments', label: '🏆 Tournament Schedule' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id as any)}
+                className={`py-2.5 px-4 text-sm font-semibold border-b-2 transition ${tab === t.id ? 'border-blue-600 text-blue-600 bg-white rounded-t' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-
-          {isAdmin && (
-            <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-lg text-xs font-medium">
-              <button
-                onClick={() => setStatusFilter('active')}
-                className={`px-3 py-1.5 rounded-md transition ${
-                  statusFilter === 'active'
-                    ? 'bg-white text-slate-800 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                🟢 Active ({sessions.filter((s) => s.is_active).length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('inactive')}
-                className={`px-3 py-1.5 rounded-md transition ${
-                  statusFilter === 'inactive'
-                    ? 'bg-white text-slate-800 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                ⚪ Inactive ({sessions.filter((s) => !s.is_active).length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-md transition ${
-                  statusFilter === 'all'
-                    ? 'bg-white text-slate-800 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                📂 All ({sessions.length})
-              </button>
+          {isAdmin && tab === 'availability' && (
+            <div className="flex text-xs bg-slate-200 p-0.5 rounded">
+              {(['active', 'inactive', 'all'] as const).map((mode) => (
+                <button key={mode} onClick={() => setFilter(mode)} className={`px-2 py-1 rounded capitalize ${filter === mode ? 'bg-white font-bold shadow-sm' : 'text-slate-600'}`}>
+                  {mode}
+                </button>
+              ))}
             </div>
           )}
         </div>
 
-        {/* USER NAME BAR WITH ROSTER VALIDATION */}
-        <div className="bg-white p-4 rounded-lg shadow-sm border space-y-2 sticky top-4 z-10">
-          <div className="flex flex-wrap gap-4 items-center">
-            <label className="font-semibold text-slate-700">Your Name:</label>
-
-            <div className="relative flex-1 max-w-xs">
-              <input
-                type="text"
-                list="team-roster-list"
-                placeholder="Select or type your name..."
-                value={userName}
-                onChange={(e) => handleNameChange(e.target.value)}
-                className="w-full border px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-              <datalist id="team-roster-list">
-                {teamRoster.map((m) => (
-                  <option key={m.id} value={m.name} />
-                ))}
-              </datalist>
-            </div>
-
-            {userName.trim() !== '' && (
-              <div>
-                {isNameVerified ? (
-                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                    ✓ Verified Team Member
-                  </span>
-                ) : (
-                  <span className="text-xs font-semibold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
-                    ⚠️ Name not on roster
-                  </span>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'availability' && (
-              <>
-                <button
-                  onClick={handleSaveAvailability}
-                  disabled={!isNameVerified}
-                  className="bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-4 py-1.5 rounded-md transition text-sm ml-auto"
-                >
-                  Save My Availability
-                </button>
-                {isSubmitted && <span className="text-sm text-green-600 font-medium">✓ Saved!</span>}
-              </>
-            )}
+        {/* Name Selector Bar */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border flex flex-wrap gap-4 items-center sticky top-4 z-10">
+          <label className="text-sm font-bold text-slate-700">Your Name:</label>
+          <div className="relative flex-1 max-w-xs">
+            <input
+              type="text"
+              list="roster-list"
+              placeholder="Select or enter your name..."
+              value={userName}
+              onChange={(e) => { setUserName(e.target.value); setIsSaved(false); setVoteSaved(false); }}
+              className="w-full border px-3 py-1.5 rounded text-sm focus:ring-2 focus:ring-blue-500"
+            />
+            <datalist id="roster-list">
+              {roster.map((m) => <option key={m.id} value={m.name} />)}
+            </datalist>
           </div>
+          {userName.trim() && (
+            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${isVerified ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-rose-50 text-rose-700 border-rose-300'}`}>
+              {isVerified ? '✓ Verified Member' : '⚠️ Name not on roster'}
+            </span>
+          )}
+          {tab === 'availability' && (
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={handleSaveAvail} disabled={!isVerified} className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-1.5 rounded transition">
+                Save Availability
+              </button>
+              {isSaved && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
+            </div>
+          )}
         </div>
 
-        {/* ADMIN ROSTER MANAGER PANEL */}
+        {/* Admin Roster Editor */}
         {isAdmin && (
-          <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-lg space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">
-              ⚙️ Admin: Manage Approved Team Roster ({teamRoster.length} Members)
-            </h3>
-
-            <form onSubmit={handleAddRosterMember} className="flex gap-2 max-w-md">
-              <input
-                type="text"
-                placeholder="New member full name..."
-                value={newMemberName}
-                onChange={(e) => setNewMemberName(e.target.value)}
-                className="border px-3 py-1 rounded-md text-xs flex-1 bg-white"
-              />
-              <button
-                type="submit"
-                className="bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs px-3 py-1 rounded-md transition"
-              >
-                + Add Member
-              </button>
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg space-y-2 text-xs">
+            <span className="font-bold text-amber-900 block">⚙️ Manage Team Roster ({roster.length} Members)</span>
+            <form onSubmit={addRoster} className="flex gap-2 max-w-sm">
+              <input type="text" placeholder="Add full name..." value={newMember} onChange={(e) => setNewMember(e.target.value)} className="border px-2 py-1 rounded flex-1 bg-white" />
+              <button type="submit" className="bg-amber-800 text-white px-2 py-1 rounded font-semibold">+ Add</button>
             </form>
-
-            <div className="flex flex-wrap gap-2 pt-1">
-              {teamRoster.map((m) => (
-                <span
-                  key={m.id}
-                  className="bg-white border text-slate-700 text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm"
-                >
-                  <span>{m.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveRosterMember(m.id)}
-                    className="text-slate-400 hover:text-red-600 font-bold ml-1 text-xs"
-                    title="Remove from roster"
-                  >
-                    ×
-                  </button>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {roster.map((m) => (
+                <span key={m.id} className="bg-white border text-slate-700 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                  {m.name}
+                  <button onClick={() => deleteRoster(m.id)} className="text-slate-400 hover:text-red-600 ml-1 font-bold">×</button>
                 </span>
               ))}
             </div>
@@ -687,291 +373,154 @@ export default function Home() {
         )}
 
         {/* TAB 1: AVAILABILITY GRID */}
-        {activeTab === 'availability' && (
-          <div className="space-y-8">
-            {filteredSessions.length === 0 ? (
-              <div className="bg-white p-12 text-center rounded-lg border text-slate-500 italic">
-                No active meeting sessions found.
-              </div>
-            ) : (
-              filteredSessions.map((session, sessionIdx) => {
-                const sessionDates = session.dates.map((dStr) => parseLocalDate(dStr));
-                const firstDate = sessionDates[0] || new Date();
-                const numDays = sessionDates.length;
-                const timeSlots = generateTimeSlots(session.start_hour, session.end_hour);
+        {tab === 'availability' && (
+          <div className="space-y-6">
+            {filteredSessions.map((s) => {
+              const dates = s.dates.map(parseDate);
+              const daySlots: { hour: number; min: number; label: string }[] = [];
+              for (let h = s.start_hour; h < s.end_hour; h++) {
+                const p = h >= 12 ? 'pm' : 'am';
+                const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                daySlots.push({ hour: h, min: 0, label: `${dh}:00${p}` });
+                daySlots.push({ hour: h, min: 30, label: `${dh}:30${p}` });
+              }
+              const respondents = Array.from(new Set(
+                availabilities.filter((a) => {
+                  const sd = new Date(a.slot_time);
+                  return dates.some((d) => d.getFullYear() === sd.getFullYear() && d.getMonth() === sd.getMonth() && d.getDate() === sd.getDate());
+                }).map((a) => a.user_name.trim())
+              ));
 
-                const sessionRespondentSet = new Set<string>();
-                allAvailabilities.forEach((item) => {
-                  if (!item?.slot_time || !item?.user_name) return;
-                  const slotD = new Date(item.slot_time);
-
-                  const matchesSession = sessionDates.some(
-                    (d) =>
-                      d.getFullYear() === slotD.getFullYear() &&
-                      d.getMonth() === slotD.getMonth() &&
-                      d.getDate() === slotD.getDate()
-                  );
-
-                  if (matchesSession) {
-                    sessionRespondentSet.add(item.user_name.trim());
-                  }
-                });
-
-                const sessionRespondentsList = Array.from(sessionRespondentSet);
-                const sessionRespondentsCount = sessionRespondentsList.length;
-                const isCurrentHoveredSession = hoveredSlot?.sessionId === session.id;
-
-                return (
-                  <div
-                    key={session.id}
-                    className={`bg-white p-6 rounded-lg shadow-sm border space-y-4 transition-all ${
-                      !session.is_active ? 'opacity-70 bg-slate-50' : ''
-                    }`}
-                  >
-                    <div className="flex flex-wrap justify-between items-center border-b pb-2 gap-2">
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
-
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleToggleActive(session)}
-                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border transition ${
-                              session.is_active
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                                : 'bg-slate-200 text-slate-600 border-slate-300 hover:bg-slate-300'
-                            }`}
-                            title="Click to toggle Active/Inactive"
-                          >
-                            {session.is_active ? '🟢 Active' : '⚪ Inactive'}
-                          </button>
-                        )}
-                      </div>
-
+              return (
+                <div key={s.id} className="bg-white p-5 rounded-lg shadow-sm border space-y-3">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold">{s.label}</h2>
                       {isAdmin && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            disabled={sessionIdx === 0}
-                            onClick={() => handleMoveSession(sessionIdx, 'up')}
-                            className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 text-slate-600"
-                            title="Move Up"
-                          >
-                            ⬆️ Up
-                          </button>
-                          <button
-                            disabled={sessionIdx === filteredSessions.length - 1}
-                            onClick={() => handleMoveSession(sessionIdx, 'down')}
-                            className="text-xs border px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-30 text-slate-600"
-                            title="Move Down"
-                          >
-                            ⬇️ Down
-                          </button>
-                          <button
-                            onClick={() => openEditModal(session)}
-                            className="text-xs text-slate-600 hover:text-blue-600 font-medium border px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 transition"
-                          >
-                            ✏️ Edit Title & Dates
-                          </button>
-                        </div>
+                        <button
+                          onClick={async () => {
+                            await supabase.from('session_config').update({ is_active: !s.is_active }).eq('id', s.id);
+                            loadAll();
+                          }}
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold border ${s.is_active ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-200 text-slate-600'}`}
+                        >
+                          {s.is_active ? 'Active' : 'Inactive'}
+                        </button>
                       )}
                     </div>
+                    {isAdmin && (
+                      <button onClick={() => { setEditId(s.id); setMLabel(s.label); setMDates(s.dates); setMStart(s.start_hour); setMEnd(s.end_hour); setModal(true); }} className="text-xs text-blue-600 border px-2 py-0.5 rounded bg-slate-50">
+                        ✏️ Edit
+                      </button>
+                    )}
+                  </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Left: Schedule Selector */}
-                      <div>
-                        <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Availability</h3>
-                        <ScheduleSelector
-                          startDate={firstDate}
-                          numDays={numDays}
-                          minTime={session.start_hour}
-                          maxTime={session.end_hour}
-                          hourlyChunks={2}
-                          timeFormat="h:mm a"
-                          dateFormat="M/D"
-                          selection={selectedSlots}
-                          onChange={setSelectedSlots}
-                          selectedColor="#22c55e"
-                          unselectedColor="#f1f5f9"
-                        />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">My Availability</h3>
+                      <ScheduleSelector
+                        startDate={dates[0] || new Date()}
+                        numDays={dates.length}
+                        minTime={s.start_hour}
+                        maxTime={s.end_hour}
+                        hourlyChunks={2}
+                        timeFormat="h:mm a"
+                        dateFormat="M/D"
+                        selection={selectedSlots}
+                        onChange={setSelectedSlots}
+                        selectedColor="#22c55e"
+                        unselectedColor="#f1f5f9"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase">Team Overlap</h3>
+                        <span className="text-xs text-slate-400">Respondents: {respondents.length}</span>
                       </div>
-
-                      {/* Right: Heatmap Grid */}
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-baseline">
-                          <h3 className="text-sm font-semibold text-slate-600">Team Overlap</h3>
-                          <span className="text-xs text-slate-500">
-                            Respondents: {sessionRespondentsCount}
-                          </span>
+                      {hover ? (
+                        <div className="bg-slate-900 text-white p-2.5 rounded text-xs space-y-1">
+                          <span className="font-bold border-b border-slate-700 block pb-1">{hover.label} ({hover.free.length}/{respondents.length} Free)</span>
+                          <p className="text-emerald-400">✅ {hover.free.join(', ') || 'None'}</p>
+                          <p className="text-rose-400">❌ {hover.busy.join(', ') || 'None'}</p>
                         </div>
-
-                        {/* HOVER INSPECTOR */}
-                        {isCurrentHoveredSession && hoveredSlot ? (
-                          <div className="bg-slate-900 text-white p-3.5 rounded-lg shadow-inner space-y-2 text-xs transition-all">
-                            <div className="font-bold border-b border-slate-700 pb-1.5 text-slate-200 flex justify-between items-center">
-                              <span>📅 {hoveredSlot.dayLabel} @ {hoveredSlot.timeLabel}</span>
-                              <span className="text-[11px] font-normal text-slate-400">
-                                {hoveredSlot.available.length}/{sessionRespondentsCount} Free
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 pt-0.5">
-                              <div className="space-y-1 border-r border-slate-800 pr-2">
-                                <span className="text-emerald-400 font-semibold block">
-                                  ✅ Available ({hoveredSlot.available.length})
-                                </span>
-                                {hoveredSlot.available.length > 0 ? (
-                                  <p className="text-slate-300 leading-relaxed font-medium">
-                                    {hoveredSlot.available.join(', ')}
-                                  </p>
-                                ) : (
-                                  <p className="text-slate-500 italic">None</p>
-                                )}
-                              </div>
-
-                              <div className="space-y-1 pl-1">
-                                <span className="text-rose-400 font-semibold block">
-                                  ❌ Unavailable ({hoveredSlot.unavailable.length})
-                                </span>
-                                {hoveredSlot.unavailable.length > 0 ? (
-                                  <p className="text-slate-300 leading-relaxed font-medium">
-                                    {hoveredSlot.unavailable.join(', ')}
-                                  </p>
-                                ) : (
-                                  <p className="text-slate-500 italic">None</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="bg-slate-100 p-3 rounded-lg text-xs text-slate-500 italic text-center border border-dashed border-slate-300">
-                            Hover over any time slot below to inspect who is available and who is busy.
-                          </div>
-                        )}
-
-                        {/* Heatmap Table */}
-                        <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHoveredSlot(null)}>
-                          <div
-                            className="grid text-center font-semibold text-slate-600 border-b pb-2 mb-1"
-                            style={{
-                              gridTemplateColumns: `60px repeat(${sessionDates.length}, minmax(0, 1fr))`,
-                            }}
-                          >
-                            <div>Time</div>
-                            {sessionDates.map((d, idx) => (
-                              <div key={idx}>{formatDateShort(d)}</div>
-                            ))}
-                          </div>
-
-                          <div className="space-y-1">
-                            {timeSlots.map((slot, i) => (
-                              <div
-                                key={i}
-                                className="grid gap-1 items-center h-6"
-                                style={{
-                                  gridTemplateColumns: `60px repeat(${sessionDates.length}, minmax(0, 1fr))`,
-                                }}
-                              >
-                                <div className="text-slate-400 text-right pr-2 text-[10px]">{slot.label}</div>
-
-                                {sessionDates.map((d, dIdx) => {
-                                  const slotDate = new Date(
-                                    d.getFullYear(),
-                                    d.getMonth(),
-                                    d.getDate(),
-                                    slot.hour,
-                                    slot.minute
-                                  );
-
-                                  const users = slotUserMap.get(getSlotKey(slotDate)) || [];
-                                  const unavailable = sessionRespondentsList.filter((u) => !users.includes(u));
-                                  const opacity = sessionRespondentsCount > 0 ? users.length / sessionRespondentsCount : 0;
-
-                                  return (
-                                    <div
-                                      key={dIdx}
-                                      onMouseEnter={() =>
-                                        setHoveredSlot({
-                                          sessionId: session.id,
-                                          dayLabel: formatDateShort(d),
-                                          timeLabel: slot.label,
-                                          available: users,
-                                          unavailable: unavailable,
-                                        })
-                                      }
-                                      style={{
-                                        backgroundColor: users.length > 0 ? `rgba(34, 197, 94, ${Math.max(opacity, 0.3)})` : '#f1f5f9',
-                                      }}
-                                      className="h-full rounded flex items-center justify-center font-bold text-green-900 text-[10px] cursor-pointer hover:ring-2 hover:ring-slate-800 transition-all"
-                                    >
-                                      {users.length > 0 ? users.length : ''}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-dashed p-2 text-center text-xs text-slate-400">Hover time slot for details</div>
+                      )}
+                      <div className="border rounded bg-white p-2 text-xs" onMouseLeave={() => setHover(null)}>
+                        <div className="grid text-center font-bold text-slate-600 border-b pb-1 mb-1" style={{ gridTemplateColumns: `50px repeat(${dates.length}, 1fr)` }}>
+                          <div>Time</div>
+                          {dates.map((d, i) => <div key={i}>{fmtDate(d)}</div>)}
                         </div>
+                        {daySlots.map((slot, si) => (
+                          <div key={si} className="grid items-center h-5 mb-0.5" style={{ gridTemplateColumns: `50px repeat(${dates.length}, 1fr)` }}>
+                            <span className="text-[10px] text-slate-400 text-right pr-1.5">{slot.label}</span>
+                            {dates.map((d, di) => {
+                              const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate(), slot.hour, slot.min);
+                              const free = slotMap.get(slotKey(dt)) || [];
+                              const busy = respondents.filter((u) => !free.includes(u));
+                              const op = respondents.length ? free.length / respondents.length : 0;
+                              return (
+                                <div
+                                  key={di}
+                                  onMouseEnter={() => setHover({ label: `${fmtDate(d)} @ ${slot.label}`, free, busy })}
+                                  style={{ backgroundColor: free.length ? `rgba(34, 197, 94, ${Math.max(op, 0.3)})` : '#f1f5f9' }}
+                                  className="h-full rounded mx-0.5 flex items-center justify-center font-bold text-[10px] text-green-950 cursor-pointer"
+                                >
+                                  {free.length || ''}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                );
-              })
-            )}
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* TAB 2: SNACK SIGN-UP */}
-        {activeTab === 'snacks' && (
-          <div className="space-y-8">
-            {filteredSessions.map((session) => (
-              <div key={session.id} className="bg-white p-6 rounded-lg shadow-sm border space-y-4">
-                <div className="flex items-center gap-3 border-b pb-2">
-                  <h2 className="text-xl font-bold text-slate-800">{session.label}</h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {session.dates.map((dateStr, idx) => {
-                    const d = parseLocalDate(dateStr);
-                    const daySignups = snackSignups.filter(
-                      (s) =>
-                        (s.session_id === session.id || (s as any).weekend_id === session.id) &&
-                        (s.date_str === dateStr || (s as any).day_of_week === dateStr)
-                    );
-
+        {tab === 'snacks' && (
+          <div className="space-y-6">
+            {filteredSessions.map((s) => (
+              <div key={s.id} className="bg-white p-5 rounded-lg shadow-sm border space-y-3">
+                <h2 className="text-lg font-bold border-b pb-2">{s.label}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {s.dates.map((dStr, di) => {
+                    const dt = parseDate(dStr);
+                    const list = snacks.filter((sn) => (sn.session_id === s.id || (sn as any).weekend_id === s.id) && (sn.date_str === dStr || (sn as any).day_of_week === dStr));
                     return (
-                      <div key={idx} className="border rounded-lg p-5 bg-slate-50 space-y-4">
-                        <div className="flex justify-between items-center border-b pb-2">
-                          <h3 className="font-semibold text-slate-700">
-                            {formatDateShort(d)} Snacks
-                          </h3>
-                          <button
-                            onClick={() => handleAddSnackSignup(session.id, dateStr)}
-                            disabled={!isNameVerified}
-                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded transition"
-                          >
-                            + Sign Me Up
-                          </button>
+                      <div key={di} className="bg-slate-50 border rounded-lg p-3.5 space-y-2.5">
+                        <div className="flex justify-between items-center border-b pb-1.5">
+                          <span className="font-bold text-sm">{fmtDate(dt)}</span>
+                          <div className="flex gap-1">
+                            <button onClick={() => handleSnack(s.id, dStr, true)} className="bg-amber-600 hover:bg-amber-700 text-white text-[11px] px-2 py-0.5 rounded font-medium">
+                              💰 Funds
+                            </button>
+                            <button onClick={() => handleSnack(s.id, dStr)} disabled={!isVerified} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-[11px] px-2 py-0.5 rounded font-medium">
+                              + Sign Me Up
+                            </button>
+                          </div>
                         </div>
-
-                        <div className="space-y-2">
-                          <span className="text-xs text-slate-500 font-medium">Bringing Snacks:</span>
-                          {daySignups.length === 0 ? (
-                            <p className="text-sm italic text-slate-400">No one signed up yet.</p>
-                          ) : (
-                            <ul className="flex flex-wrap gap-2">
-                              {daySignups.map((s) => (
-                                <li key={s.id} className="bg-white border text-slate-700 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                                  <span>😊 {s.user_name}</span>
-                                  <button
-                                    onClick={() => handleRemoveSnackSignup(s.id)}
-                                    className="text-slate-400 hover:text-red-500 font-bold ml-1"
-                                    title="Remove sign-up"
-                                  >
-                                    ×
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-semibold text-slate-500 block">Bringing Snacks:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {list.length === 0 ? (
+                              <span className="text-xs text-slate-400 italic">No one signed up yet</span>
+                            ) : (
+                              list.map((item) => {
+                                const isFunds = item.user_name.toLowerCase() === 'team funds';
+                                return (
+                                  <span key={item.id} className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${isFunds ? 'bg-amber-100 border-amber-300 text-amber-900 font-semibold' : 'bg-white text-slate-700'}`}>
+                                    {isFunds ? '💰 Team Funds' : `😊 ${item.user_name}`}
+                                    <button onClick={() => removeSnack(item.id)} className="text-slate-400 hover:text-red-500 font-bold ml-0.5">×</button>
+                                  </span>
+                                );
+                              })
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -981,119 +530,234 @@ export default function Home() {
             ))}
           </div>
         )}
-      </div>
 
-      {/* MODAL: ADD / EDIT MEETING SESSION */}
-      {showModal && isAdmin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-bold text-slate-800">
-                {editingSessionId ? 'Edit Meeting Session' : 'Add New Meeting Session'}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-xl"
-              >
-                ×
-              </button>
+        {/* TAB 3: TOURNAMENT SCHEDULE (MULTI-SELECT) */}
+        {tab === 'tournaments' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 rounded-xl space-y-3">
+              <div className="flex justify-between items-center">
+                <h2 className="font-bold text-lg">📋 Tournament Schedule & Pit Notice</h2>
+                <span className="bg-amber-400 text-slate-900 text-xs px-2.5 py-0.5 rounded-full font-bold">Opens Oct 23</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament.</li>
+                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables.</li>
+                </ul>
+                <div className="bg-white/10 p-2.5 rounded border border-white/20">
+                  <span className="text-amber-300 font-bold block mb-0.5">⚡ Power Policy:</span>
+                  No pit power provided; central station has 1 outlet/team; bring battery packs.
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveSession} className="space-y-4 text-sm">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Session Title / Label</label>
+            {/* Voting Component */}
+            <div className="bg-white p-5 rounded-lg border shadow-sm space-y-5">
+              <div className="border-b pb-2">
+                <h3 className="font-bold text-base">Select Tournament Availability (Check All That Work)</h3>
+                <p className="text-xs text-slate-500">Pick every option that fits your family's schedule to identify team consensus.</p>
+              </div>
+
+              {/* Selection #1 */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-bold">1. Selection #1: League Track (Kickoff & Championship are Linked)</label>
+                  {sel1.length > 0 && (
+                    <button onClick={() => setSel1([])} className="text-xs text-slate-400 hover:text-red-500">Clear ({sel1.length})</button>
+                  )}
+                </div>
+                <div className="bg-amber-50 border border-amber-300 rounded p-2 text-xs text-amber-900">
+                  ⚠️ Selection #1 binds your Week #1 and Week #4 League Championship match dates together.
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {TRACKS.map((t) => {
+                    const active = sel1.includes(t.id);
+                    return (
+                      <label
+                        key={t.id}
+                        onClick={() => setSel1(toggle(sel1, t.id))}
+                        className={`border-2 p-3 rounded-lg cursor-pointer transition flex flex-col justify-between ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-sm">{t.name}</span>
+                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">{t.badge}</span>
+                          </div>
+                          <div className="text-xs text-slate-600 bg-white/70 p-2 rounded border border-slate-100 space-y-0.5">
+                            <div><strong className="text-slate-500">W1:</strong> {t.w1}</div>
+                            <div><strong className="text-slate-500">W4:</strong> {t.w4}</div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center border-t mt-2.5 pt-1.5">
+                          <span className="text-xs text-slate-500 font-medium">Available</span>
+                          <input type="checkbox" checked={active} onChange={() => {}} className="h-4 w-4 text-blue-600 rounded" />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selection #2 & #3 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)</label>
+                    {sel2.length > 0 && <button onClick={() => setSel2([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
+                  </div>
+                  <div className="space-y-2">
+                    {W2_OPTS.map((o) => {
+                      const active = sel2.includes(o.id);
+                      return (
+                        <label key={o.id} onClick={() => setSel2(toggle(sel2, o.id))} className={`flex justify-between items-center border-2 p-3 rounded-lg cursor-pointer ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                          <span className="text-sm font-bold">{o.label}</span>
+                          <input type="checkbox" checked={active} onChange={() => {}} className="h-4 w-4 text-blue-600 rounded" />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)</label>
+                    {sel3.length > 0 && <button onClick={() => setSel3([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
+                  </div>
+                  <div className="space-y-2">
+                    {W3_OPTS.map((o) => {
+                      const active = sel3.includes(o.id);
+                      return (
+                        <label key={o.id} onClick={() => setSel3(toggle(sel3, o.id))} className={`flex justify-between items-center border-2 p-3 rounded-lg cursor-pointer ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                          <span className="text-sm font-bold">{o.label}</span>
+                          <input type="checkbox" checked={active} onChange={() => {}} className="h-4 w-4 text-blue-600 rounded" />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Volunteer Note */}
+              <div className="border-t pt-3 space-y-1.5">
+                <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Week 5: Mid-season Code Sprint"
-                  value={modalLabel}
-                  onChange={(e) => setModalLabel(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
-                  required
+                  placeholder="e.g. Parent available to referee or queue fields..."
+                  value={volNote}
+                  onChange={(e) => setVolNote(e.target.value)}
+                  className="w-full border px-3 py-1.5 rounded text-sm focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              {/* CALENDAR DATE PICKERS */}
-              <div className="space-y-2">
-                <label className="block font-semibold text-slate-700">Meeting Dates (Calendar Picker)</label>
+              <div className="flex justify-end items-center gap-2 pt-1">
+                {voteSaved && <span className="text-xs text-green-600 font-bold">✓ Preferences saved!</span>}
+                <button onClick={handleSaveVote} disabled={!isVerified} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-1.5 rounded transition">
+                  Submit Tournament Availability
+                </button>
+              </div>
+            </div>
 
-                {modalDates.map((dVal, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <input
-                      type="date"
-                      value={dVal}
-                      onChange={(e) => handleDateChange(idx, e.target.value)}
-                      className="border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
-                      required
-                    />
-                    {modalDates.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeDateField(idx)}
-                        className="text-red-500 hover:text-red-700 font-bold px-2 py-1"
-                        title="Remove date"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
+            {/* Results Breakdown */}
+            <div className="bg-white p-5 rounded-lg border shadow-sm space-y-3">
+              <h3 className="font-bold text-sm border-b pb-2">📊 Consensus Overlap ({votes.length}/14 Responded)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Selection #1 Tracks</span>
+                  {TRACKS.map((t) => {
+                    const matched = votes.filter((v) => Array.isArray(v.selection_1) && v.selection_1.includes(t.id)).map((v) => v.user_name);
+                    return (
+                      <div key={t.id} className="border p-2 rounded bg-slate-50 text-xs">
+                        <div className="flex justify-between font-bold"><span>{t.name}</span><span className="text-blue-700">{matched.length} free</span></div>
+                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Week #2 Match</span>
+                  {W2_OPTS.map((o) => {
+                    const matched = votes.filter((v) => Array.isArray(v.selection_2) && v.selection_2.includes(o.id)).map((v) => v.user_name);
+                    return (
+                      <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
+                        <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
+                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Week #3 Match</span>
+                  {W3_OPTS.map((o) => {
+                    const matched = votes.filter((v) => Array.isArray(v.selection_3) && v.selection_3.includes(o.id)).map((v) => v.user_name);
+                    return (
+                      <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
+                        <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
+                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="border-t pt-2 space-y-1 text-xs">
+                <span className="font-bold text-slate-500 uppercase">Volunteers:</span>
+                {votes.filter((v) => v.volunteer_note).map((v) => (
+                  <div key={v.id}><strong className="text-slate-700">{v.user_name}:</strong> <span className="text-slate-600">{v.volunteer_note}</span></div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
+      {/* Admin Session Modal */}
+      {modal && isAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-bold">{editId ? 'Edit Session' : 'New Session'}</h3>
+              <button onClick={() => setModal(false)} className="text-slate-400 text-lg font-bold">×</button>
+            </div>
+            <form onSubmit={saveSession} className="space-y-3 text-sm">
+              <div>
+                <label className="font-semibold block mb-1">Title</label>
+                <input type="text" value={mLabel} onChange={(e) => setMLabel(e.target.value)} className="w-full border p-2 rounded" required />
+              </div>
+              <div>
+                <label className="font-semibold block mb-1">Dates</label>
+                {mDates.map((d, i) => (
+                  <input
+                    key={i}
+                    type="date"
+                    value={d}
+                    onChange={(e) => {
+                      const copy = [...mDates];
+                      copy[i] = e.target.value;
+                      setMDates(copy);
+                    }}
+                    className="border p-2 rounded w-full mb-1"
+                    required
+                  />
+                ))}
                 <button
                   type="button"
-                  onClick={addDateField}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold mt-1 inline-flex items-center gap-1"
+                  onClick={() => {
+                    const last = mDates[mDates.length - 1];
+                    if (last) {
+                      const dt = parseDate(last);
+                      dt.setDate(dt.getDate() + 1);
+                      setMDates([...mDates, dt.toISOString().split('T')[0]]);
+                    } else {
+                      setMDates([...mDates, '']);
+                    }
+                  }}
+                  className="text-xs text-blue-600 font-semibold"
                 >
-                  ➕ Add Another Date
+                  + Add Date
                 </button>
               </div>
-
-              {/* TIME RANGE SELECTORS */}
-              <div className="grid grid-cols-2 gap-4 border-t pt-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Start Time</label>
-                  <select
-                    value={modalStartHour}
-                    onChange={(e) => setModalStartHour(Number(e.target.value))}
-                    className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
-                  >
-                    {Array.from({ length: 24 }).map((_, i) => (
-                      <option key={i} value={i}>
-                        {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">End Time</label>
-                  <select
-                    value={modalEndHour}
-                    onChange={(e) => setModalEndHour(Number(e.target.value))}
-                    className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
-                  >
-                    {Array.from({ length: 24 }).map((_, i) => (
-                      <option key={i} value={i}>
-                        {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
-                >
-                  {editingSessionId ? 'Save Changes' : 'Create Session'}
-                </button>
+              <div className="flex justify-end gap-2 border-t pt-3">
+                <button type="button" onClick={() => setModal(false)} className="border px-3 py-1.5 rounded">Cancel</button>
+                <button type="submit" className="bg-blue-600 text-white px-3 py-1.5 rounded font-semibold">Save</button>
               </div>
             </form>
           </div>
