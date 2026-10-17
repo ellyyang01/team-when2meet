@@ -29,7 +29,7 @@ interface TeamMember {
 interface TournamentVote {
   id: string;
   user_name: string;
-  selection_1: string[] | null; // Stores tags formatted as "${trackId}:w1" and "${trackId}:w4"
+  selection_1: string[] | null;
   selection_2: string[] | null;
   selection_3: string[] | null;
   volunteer_note: string | null;
@@ -565,12 +565,12 @@ export default function Home() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">
                 <ul className="list-disc list-inside space-y-1">
-                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament.</li>
-                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables.</li>
+                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament[cite: 5].</li>
+                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables[cite: 5].</li>
                 </ul>
                 <div className="bg-white/10 p-2.5 rounded border border-white/20">
                   <span className="text-amber-300 font-bold block mb-0.5">⚡ Power Policy:</span>
-                  No pit power provided; central station has 1 outlet/team; bring battery packs.
+                  No pit power provided; central station has 1 outlet/team; bring battery packs[cite: 5].
                 </div>
               </div>
             </div>
@@ -580,14 +580,14 @@ export default function Home() {
               <div className="border-b pb-2">
                 <h3 className="font-bold text-base">Select Tournament Availability (Check All That Work)</h3>
                 <p className="text-xs text-slate-500">
-                  Select your family availability directly inside each track card for Kickoff (W1) and League Championship (W4).
+                  Select your family availability directly inside each track card for Kickoff (W1) and League Championship (W4)[cite: 5].
                 </p>
               </div>
 
               {/* Selection 1: Availability in Each Track Card */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold">1. Selection #1: League Tracks & Match Day Availability</label>
+                  <label className="text-sm font-bold">1. Selection #1: League Tracks & Match Day Availability[cite: 5]</label>
                   {sel1.length > 0 && (
                     <button onClick={() => setSel1([])} className="text-xs text-slate-400 hover:text-red-500">
                       Clear Selection #1 ({sel1.length})
@@ -623,7 +623,6 @@ export default function Home() {
                             : 'border-slate-200 bg-white'
                         }`}
                       >
-                        {/* Header */}
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="font-bold text-sm text-slate-900">{t.name}</span>
@@ -634,9 +633,7 @@ export default function Home() {
                           <span className="text-[11px] text-slate-500 block">Check days that work for your family:</span>
                         </div>
 
-                        {/* Interactive Availability Options Inside This Track */}
                         <div className="space-y-2 bg-white/80 p-2.5 rounded-lg border border-slate-200/80 text-xs">
-                          {/* Week 1 Kickoff */}
                           <label
                             onClick={() => setSel1(toggle(sel1, tagW1))}
                             className={`flex items-center justify-between p-2 rounded cursor-pointer border transition ${
@@ -650,7 +647,6 @@ export default function Home() {
                             <input type="checkbox" checked={canW1} onChange={() => {}} className="h-4 w-4 text-emerald-600 rounded" />
                           </label>
 
-                          {/* Week 4 Championship */}
                           <label
                             onClick={() => setSel1(toggle(sel1, tagW4))}
                             className={`flex items-center justify-between p-2 rounded cursor-pointer border transition ${
@@ -658,14 +654,13 @@ export default function Home() {
                             }`}
                           >
                             <div className="pr-1">
-                              <span className="block font-bold text-[11px] text-slate-500 uppercase">Week #4 Championship</span>
+                              <span className="block font-bold text-[11px] text-slate-500 uppercase">Week #4 Championship[cite: 5]</span>
                               <span className="text-xs">{t.w4}</span>
                             </div>
                             <input type="checkbox" checked={canW4} onChange={() => {}} className="h-4 w-4 text-emerald-600 rounded" />
                           </label>
                         </div>
 
-                        {/* Quick Toggle for Both Days */}
                         <button
                           type="button"
                           onClick={toggleBoth}
@@ -687,7 +682,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)</label>
+                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)[cite: 5]</label>
                     {sel2.length > 0 && <button onClick={() => setSel2([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -705,7 +700,7 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)</label>
+                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)[cite: 5]</label>
                     {sel3.length > 0 && <button onClick={() => setSel3([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -724,7 +719,7 @@ export default function Home() {
 
               {/* Volunteer Note */}
               <div className="border-t pt-3 space-y-1.5">
-                <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)</label>
+                <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)[cite: 5]</label>
                 <input
                   type="text"
                   placeholder="e.g. Parent available to referee or queue fields..."
@@ -746,7 +741,7 @@ export default function Home() {
             <div className="bg-white p-5 rounded-lg border shadow-sm space-y-4">
               <h3 className="font-bold text-sm border-b pb-2">📊 Track Attendance Consensus ({votes.length}/14 Responded)</h3>
 
-              {/* Track-by-Track Consensus Table */}
+              {/* Track-by-Track Consensus Table with Detailed Names for Each Day */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {TRACKS.map((t) => {
                   const tagW1 = `${t.id}:w1`;
@@ -757,29 +752,45 @@ export default function Home() {
                   const canBothVoters = votes.filter((v) => Array.isArray(v.selection_1) && (v.selection_1.includes(t.id) || (v.selection_1.includes(tagW1) && v.selection_1.includes(tagW4)))).map((v) => v.user_name);
 
                   return (
-                    <div key={t.id} className="border p-3 rounded-lg bg-slate-50 text-xs space-y-2">
-                      <div className="flex justify-between items-center border-b pb-1">
-                        <span className="font-bold text-slate-800">{t.name}</span>
-                        <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-semibold">{t.pattern}</span>
+                    <div key={t.id} className="border p-3 rounded-lg bg-slate-50 text-xs space-y-2.5 flex flex-col justify-between">
+                      <div className="flex justify-between items-center border-b pb-1.5">
+                        <span className="font-bold text-slate-800 text-sm">{t.name}</span>
+                        <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">{t.pattern}</span>
                       </div>
 
-                      <div className="space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 font-medium">Kickoff ({t.w1.split(' ')[0]}):</span>
-                          <span className="font-bold text-emerald-700">{canW1Voters.length} free</span>
+                      <div className="space-y-2">
+                        {/* Kickoff Day Names */}
+                        <div className="bg-white p-2 rounded border border-slate-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-700">Kickoff ({t.w1.split(' ')[0]})</span>
+                            <span className="text-emerald-700 font-bold">{canW1Voters.length} free</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                            {canW1Voters.length > 0 ? canW1Voters.join(', ') : <span className="text-slate-300 italic">None</span>}
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 font-medium">Champs ({t.w4.split(' ')[0]}):</span>
-                          <span className="font-bold text-emerald-700">{canW4Voters.length} free</span>
-                        </div>
-                        <div className="flex justify-between border-t pt-1 font-bold">
-                          <span className="text-blue-900">Both Dates:</span>
-                          <span className="text-blue-700">{canBothVoters.length} available</span>
-                        </div>
-                      </div>
 
-                      <div className="border-t pt-1 text-[10px] text-slate-400 truncate">
-                        {canBothVoters.length > 0 ? canBothVoters.join(', ') : 'No full overlap yet'}
+                        {/* Championship Day Names */}
+                        <div className="bg-white p-2 rounded border border-slate-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-700">Champs ({t.w4.split(' ')[0]})</span>
+                            <span className="text-emerald-700 font-bold">{canW4Voters.length} free</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                            {canW4Voters.length > 0 ? canW4Voters.join(', ') : <span className="text-slate-300 italic">None</span>}
+                          </div>
+                        </div>
+
+                        {/* Both Days Overlap */}
+                        <div className="bg-blue-50/70 p-2 rounded border border-blue-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-blue-950">Free Both Days</span>
+                            <span className="text-blue-700 font-bold">{canBothVoters.length} full overlap</span>
+                          </div>
+                          <div className="text-[11px] text-blue-900 mt-0.5 leading-snug font-medium">
+                            {canBothVoters.length > 0 ? canBothVoters.join(', ') : <span className="text-blue-300 italic">No full overlap yet</span>}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
@@ -795,7 +806,7 @@ export default function Home() {
                     return (
                       <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
                         <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
-                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{matched.join(', ') || 'None'}</p>
                       </div>
                     );
                   })}
@@ -807,7 +818,7 @@ export default function Home() {
                     return (
                       <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
                         <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
-                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{matched.join(', ') || 'None'}</p>
                       </div>
                     );
                   })}
