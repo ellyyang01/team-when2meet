@@ -37,11 +37,21 @@ interface TournamentVote {
 
 const POLL_ID = '00000000-0000-0000-0000-000000000001';
 
-const TRACKS = [
-  { id: 'Euclid', name: 'Euclid Track', w1: 'Sat 11/21/2026', w4: 'Sat 2/20/2027', badge: 'All Saturdays' },
-  { id: 'Gauss', name: 'Gauss Track', w1: 'Sun 11/22/2026', w4: 'Sat 2/20/2027', badge: 'Sun then Sat' },
-  { id: 'Turing', name: 'Turing Track', w1: 'Sat 11/21/2026', w4: 'Sun 2/21/2027', badge: 'Sat then Sun' },
-  { id: 'Descartes', name: 'Descartes Track', w1: 'Sun 11/22/2026', w4: 'Sun 2/21/2027', badge: 'All Sundays' },
+const W1_OPTS = [
+  { id: 'W1-Sat', label: 'Sat, Nov 21, 2026', note: 'Used by Euclid & Turing' },
+  { id: 'W1-Sun', label: 'Sun, Nov 22, 2026', note: 'Used by Gauss & Descartes' },
+];
+
+const W4_OPTS = [
+  { id: 'W4-Sat', label: 'Sat, Feb 20, 2027', note: 'Used by Euclid & Gauss' },
+  { id: 'W4-Sun', label: 'Sun, Feb 21, 2027', note: 'Used by Turing & Descartes' },
+];
+
+const TRACK_REFS = [
+  { id: 'Euclid', name: 'Euclid Track', w1: 'W1-Sat', w4: 'W4-Sat', desc: 'All Saturdays (Sat 11/21 + Sat 2/20)' },
+  { id: 'Gauss', name: 'Gauss Track', w1: 'W1-Sun', w4: 'W4-Sat', desc: 'Sun Kickoff (11/22) + Sat Champ (2/20)' },
+  { id: 'Turing', name: 'Turing Track', w1: 'W1-Sat', w4: 'W4-Sun', desc: 'Sat Kickoff (11/21) + Sun Champ (2/21)' },
+  { id: 'Descartes', name: 'Descartes Track', w1: 'W1-Sun', w4: 'W4-Sun', desc: 'All Sundays (Sun 11/22 + Sun 2/21)' },
 ];
 
 const W2_OPTS = [
@@ -531,7 +541,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: TOURNAMENT SCHEDULE (MULTI-SELECT) */}
+        {/* TAB 3: TOURNAMENT SCHEDULE (INDEPENDENT W1 & W4 MULTI-SELECT) */}
         {tab === 'tournaments' && (
           <div className="space-y-6">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 rounded-xl space-y-3">
@@ -541,12 +551,12 @@ export default function Home() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">
                 <ul className="list-disc list-inside space-y-1">
-                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament.</li>
-                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables.</li>
+                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament[cite: 5].</li>
+                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables[cite: 5].</li>
                 </ul>
                 <div className="bg-white/10 p-2.5 rounded border border-white/20">
                   <span className="text-amber-300 font-bold block mb-0.5">⚡ Power Policy:</span>
-                  No pit power provided; central station has 1 outlet/team; bring battery packs.
+                  No pit power provided; central station has 1 outlet/team; bring battery packs[cite: 5].
                 </div>
               </div>
             </div>
@@ -555,46 +565,93 @@ export default function Home() {
             <div className="bg-white p-5 rounded-lg border shadow-sm space-y-5">
               <div className="border-b pb-2">
                 <h3 className="font-bold text-base">Select Tournament Availability (Check All That Work)</h3>
-                <p className="text-xs text-slate-500">Pick every option that fits your family's schedule to identify team consensus.</p>
+                <p className="text-xs text-slate-500">
+                  You can select your availability for Week #1 Kickoff and Week #4 Championship independently.
+                </p>
               </div>
 
-              {/* Selection #1 */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold">1. Selection #1: League Track (Kickoff & Championship are Linked)</label>
-                  {sel1.length > 0 && (
-                    <button onClick={() => setSel1([])} className="text-xs text-slate-400 hover:text-red-500">Clear ({sel1.length})</button>
-                  )}
+              {/* Linked Track Reference Guide */}
+              <div className="bg-slate-50 border rounded-lg p-3 text-xs space-y-2">
+                <span className="font-bold text-slate-700 block">📌 Registration Context: 4 Official League Tracks</span>
+                <p className="text-slate-500">
+                  The league links Week #1 and Week #4 together. Pick which individual dates you can attend; we will use the consensus table below to choose the track that maximizes attendance for both days.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
+                  {TRACK_REFS.map((t) => (
+                    <div key={t.id} className="border bg-white rounded p-2">
+                      <span className="font-bold text-slate-900 block">{t.name}</span>
+                      <span className="text-[11px] text-slate-500">{t.desc}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="bg-amber-50 border border-amber-300 rounded p-2 text-xs text-amber-900">
-                  ⚠️ Selection #1 binds your Week #1 and Week #4 League Championship match dates together.
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  {TRACKS.map((t) => {
-                    const active = sel1.includes(t.id);
-                    return (
-                      <label
-                        key={t.id}
-                        onClick={() => setSel1(toggle(sel1, t.id))}
-                        className={`border-2 p-3 rounded-lg cursor-pointer transition flex flex-col justify-between ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+              </div>
+
+              {/* Step 1: Week 1 & Week 4 Independent Selections */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
+                {/* Week #1 Options */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-bold">1. Week #1 Kickoff Match (Check all that work)</label>
+                    {sel1.filter((id) => id.startsWith('W1-')).length > 0 && (
+                      <button
+                        onClick={() => setSel1(sel1.filter((id) => !id.startsWith('W1-')))}
+                        className="text-xs text-slate-400 hover:text-red-500"
                       >
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-start">
-                            <span className="font-bold text-sm">{t.name}</span>
-                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">{t.badge}</span>
+                        Clear W1
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {W1_OPTS.map((o) => {
+                      const active = sel1.includes(o.id);
+                      return (
+                        <label
+                          key={o.id}
+                          onClick={() => setSel1(toggle(sel1, o.id))}
+                          className={`flex justify-between items-center border-2 p-3 rounded-lg cursor-pointer transition ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                        >
+                          <div>
+                            <span className="text-sm font-bold block">{o.label}</span>
+                            <span className="text-[11px] text-slate-500">{o.note}</span>
                           </div>
-                          <div className="text-xs text-slate-600 bg-white/70 p-2 rounded border border-slate-100 space-y-0.5">
-                            <div><strong className="text-slate-500">W1:</strong> {t.w1}</div>
-                            <div><strong className="text-slate-500">W4:</strong> {t.w4}</div>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center border-t mt-2.5 pt-1.5">
-                          <span className="text-xs text-slate-500 font-medium">Available</span>
                           <input type="checkbox" checked={active} onChange={() => {}} className="h-4 w-4 text-blue-600 rounded" />
-                        </div>
-                      </label>
-                    );
-                  })}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Week #4 Options */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-bold">2. Week #4 League Championship (Check all that work)</label>
+                    {sel1.filter((id) => id.startsWith('W4-')).length > 0 && (
+                      <button
+                        onClick={() => setSel1(sel1.filter((id) => !id.startsWith('W4-')))}
+                        className="text-xs text-slate-400 hover:text-red-500"
+                      >
+                        Clear W4
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {W4_OPTS.map((o) => {
+                      const active = sel1.includes(o.id);
+                      return (
+                        <label
+                          key={o.id}
+                          onClick={() => setSel1(toggle(sel1, o.id))}
+                          className={`flex justify-between items-center border-2 p-3 rounded-lg cursor-pointer transition ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                        >
+                          <div>
+                            <span className="text-sm font-bold block">{o.label}</span>
+                            <span className="text-[11px] text-slate-500">{o.note}</span>
+                          </div>
+                          <input type="checkbox" checked={active} onChange={() => {}} className="h-4 w-4 text-blue-600 rounded" />
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -602,7 +659,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">2. Week #2 Intra-league Match (Check all that work)</label>
+                    <label className="text-sm font-bold">3. Week #2 Match (Check all that work)[cite: 5]</label>
                     {sel2.length > 0 && <button onClick={() => setSel2([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -620,7 +677,7 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">3. Week #3 Intra-league Match (Check all that work)</label>
+                    <label className="text-sm font-bold">4. Week #3 Match (Check all that work)[cite: 5]</label>
                     {sel3.length > 0 && <button onClick={() => setSel3([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -639,7 +696,7 @@ export default function Home() {
 
               {/* Volunteer Note */}
               <div className="border-t pt-3 space-y-1.5">
-                <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)</label>
+                <label className="text-sm font-bold">5. Volunteer Sign-up (1–2 Volunteers per event)[cite: 5]</label>
                 <input
                   type="text"
                   placeholder="e.g. Parent available to referee or queue fields..."
@@ -658,23 +715,65 @@ export default function Home() {
             </div>
 
             {/* Results Breakdown */}
-            <div className="bg-white p-5 rounded-lg border shadow-sm space-y-3">
+            <div className="bg-white p-5 rounded-lg border shadow-sm space-y-4">
               <h3 className="font-bold text-sm border-b pb-2">📊 Consensus Overlap ({votes.length}/14 Responded)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Selection #1 Tracks</span>
-                  {TRACKS.map((t) => {
-                    const matched = votes.filter((v) => Array.isArray(v.selection_1) && v.selection_1.includes(t.id)).map((v) => v.user_name);
+
+              {/* Linked Track Feasibility Matrix */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-700 uppercase">Linked Track Compatibility (Both Days Free)</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {TRACK_REFS.map((t) => {
+                    const matchedBoth = votes.filter((v) =>
+                      Array.isArray(v.selection_1) &&
+                      v.selection_1.includes(t.w1) &&
+                      v.selection_1.includes(t.w4)
+                    ).map((v) => v.user_name);
+
                     return (
-                      <div key={t.id} className="border p-2 rounded bg-slate-50 text-xs">
-                        <div className="flex justify-between font-bold"><span>{t.name}</span><span className="text-blue-700">{matched.length} free</span></div>
+                      <div key={t.id} className="border p-2.5 rounded bg-blue-50/50 text-xs space-y-1">
+                        <div className="flex justify-between font-bold">
+                          <span className="text-blue-900">{t.name}</span>
+                          <span className="text-blue-700">{matchedBoth.length} can do both</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate">{matchedBoth.join(', ') || 'None yet'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t">
+                {/* W1 Breakdown */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Week #1 Kickoff</span>
+                  {W1_OPTS.map((o) => {
+                    const matched = votes.filter((v) => Array.isArray(v.selection_1) && v.selection_1.includes(o.id)).map((v) => v.user_name);
+                    return (
+                      <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
+                        <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
                         <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* W4 Breakdown */}
                 <div className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Week #2 Match</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Week #4 Championship</span>
+                  {W4_OPTS.map((o) => {
+                    const matched = votes.filter((v) => Array.isArray(v.selection_1) && v.selection_1.includes(o.id)).map((v) => v.user_name);
+                    return (
+                      <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
+                        <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
+                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* W2 Breakdown */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Week #2 Match</span>
                   {W2_OPTS.map((o) => {
                     const matched = votes.filter((v) => Array.isArray(v.selection_2) && v.selection_2.includes(o.id)).map((v) => v.user_name);
                     return (
@@ -685,8 +784,10 @@ export default function Home() {
                     );
                   })}
                 </div>
+
+                {/* W3 Breakdown */}
                 <div className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Week #3 Match</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Week #3 Match</span>
                   {W3_OPTS.map((o) => {
                     const matched = votes.filter((v) => Array.isArray(v.selection_3) && v.selection_3.includes(o.id)).map((v) => v.user_name);
                     return (
@@ -698,6 +799,7 @@ export default function Home() {
                   })}
                 </div>
               </div>
+
               <div className="border-t pt-2 space-y-1 text-xs">
                 <span className="font-bold text-slate-500 uppercase">Volunteers:</span>
                 {votes.filter((v) => v.volunteer_note).map((v) => (
