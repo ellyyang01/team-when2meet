@@ -29,9 +29,9 @@ interface TeamMember {
 interface TournamentVote {
   id: string;
   user_name: string;
-  selection_1: string | null;
-  selection_2: string | null;
-  selection_3: string | null;
+  selection_1: string[] | null;
+  selection_2: string[] | null;
+  selection_3: string[] | null;
   volunteer_note: string | null;
 }
 
@@ -52,11 +52,11 @@ export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Official 14 Team Members + Dynamic Roster
+  // Team Roster State (14 Members)
   const [teamRoster, setTeamRoster] = useState<TeamMember[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
 
-  // Admin Access State
+  // Admin Mode State
   const [isAdmin, setIsAdmin] = useState(false);
   const ADMIN_PASSCODE = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123';
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
@@ -65,18 +65,18 @@ export default function Home() {
   const [snackSignups, setSnackSignups] = useState<SnackSignup[]>([]);
   const [snackNameInput, setSnackNameInput] = useState('');
 
-  // Tournament Scheduling Tab States (Nullable / Optional Multi-stage Voting)
+  // Tournament Scheduling Tab States (Multi-Select Arrays)
   const [tournamentVotes, setTournamentVotes] = useState<TournamentVote[]>([]);
-  const [mySel1, setMySel1] = useState('');
-  const [mySel2, setMySel2] = useState('');
-  const [mySel3, setMySel3] = useState('');
+  const [mySel1, setMySel1] = useState<string[]>([]);
+  const [mySel2, setMySel2] = useState<string[]>([]);
+  const [mySel3, setMySel3] = useState<string[]>([]);
   const [myVolunteer, setMyVolunteer] = useState('');
   const [tourneySaved, setTourneySaved] = useState(false);
 
   // Hover Inspector State
   const [hoveredSlot, setHoveredSlot] = useState<HoveredSlotInfo | null>(null);
 
-  // Admin Session Modal State
+  // Modal State for Sessions
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [modalLabel, setModalLabel] = useState('');
@@ -157,9 +157,9 @@ export default function Home() {
   useEffect(() => {
     if (!userName.trim()) {
       setSelectedSlots([]);
-      setMySel1('');
-      setMySel2('');
-      setMySel3('');
+      setMySel1([]);
+      setMySel2([]);
+      setMySel3([]);
       setMyVolunteer('');
       setTourneySaved(false);
       return;
@@ -174,19 +174,18 @@ export default function Home() {
       (v) => v.user_name.trim().toLowerCase() === userName.trim().toLowerCase()
     );
     if (existingVote) {
-      setMySel1(existingVote.selection_1 || '');
-      setMySel2(existingVote.selection_2 || '');
-      setMySel3(existingVote.selection_3 || '');
+      setMySel1(Array.isArray(existingVote.selection_1) ? existingVote.selection_1 : existingVote.selection_1 ? [existingVote.selection_1] : []);
+      setMySel2(Array.isArray(existingVote.selection_2) ? existingVote.selection_2 : existingVote.selection_2 ? [existingVote.selection_2] : []);
+      setMySel3(Array.isArray(existingVote.selection_3) ? existingVote.selection_3 : existingVote.selection_3 ? [existingVote.selection_3] : []);
       setMyVolunteer(existingVote.volunteer_note || '');
     } else {
-      setMySel1('');
-      setMySel2('');
-      setMySel3('');
+      setMySel1([]);
+      setMySel2([]);
+      setMySel3([]);
       setMyVolunteer('');
     }
   }, [userName, allAvailabilities, tournamentVotes]);
 
-  // Case-insensitive team roster check
   const isNameVerified = teamRoster.some(
     (member) => member.name.trim().toLowerCase() === userName.trim().toLowerCase()
   );
@@ -229,21 +228,7 @@ export default function Home() {
 
   const fetchSessions = async () => {
     const { data } = await supabase.from('session_config').select('*').order('display_order', { ascending: true });
-    if (data && data.length > 0) {
-      setSessions(data);
-    } else {
-      setSessions([
-        {
-          id: '1',
-          label: 'Week 1: Aug 15 - Aug 16',
-          dates: ['2026-08-15', '2026-08-16'],
-          start_hour: 10,
-          end_hour: 19,
-          display_order: 1,
-          is_active: true,
-        },
-      ]);
-    }
+    if (data && data.length > 0) setSessions(data);
   };
 
   const fetchAvailabilities = async () => {
@@ -311,13 +296,17 @@ export default function Home() {
     await fetchAvailabilities();
   };
 
+  const toggleArrayOption = (list: string[], val: string) => {
+    return list.includes(val) ? list.filter((item) => item !== val) : [...list, val];
+  };
+
   const handleSaveTournamentVote = async () => {
     if (!userName.trim() || !isNameVerified) {
       alert('Please select your verified name in the top bar before submitting.');
       return;
     }
 
-    if (!mySel1 && !mySel2 && !mySel3 && !myVolunteer.trim()) {
+    if (mySel1.length === 0 && mySel2.length === 0 && mySel3.length === 0 && !myVolunteer.trim()) {
       alert('Please make at least one tournament selection or leave a volunteer note.');
       return;
     }
@@ -329,9 +318,13 @@ export default function Home() {
       (v) => v.user_name.trim().toLowerCase() === userName.trim().toLowerCase()
     );
 
-    const finalSel1 = mySel1 || existingVote?.selection_1 || null;
-    const finalSel2 = mySel2 || existingVote?.selection_2 || null;
-    const finalSel3 = mySel3 || existingVote?.selection_3 || null;
+    const existingSel1 = Array.isArray(existingVote?.selection_1) ? existingVote.selection_1 : [];
+    const existingSel2 = Array.isArray(existingVote?.selection_2) ? existingVote.selection_2 : [];
+    const existingSel3 = Array.isArray(existingVote?.selection_3) ? existingVote.selection_3 : [];
+
+    const finalSel1 = mySel1.length > 0 ? mySel1 : existingSel1;
+    const finalSel2 = mySel2.length > 0 ? mySel2 : existingSel2;
+    const finalSel3 = mySel3.length > 0 ? mySel3 : existingSel3;
     const finalVolunteer = myVolunteer.trim() || existingVote?.volunteer_note || '';
 
     await supabase.from('tournament_votes').delete().eq('poll_id', DEFAULT_POLL_ID).ilike('user_name', formattedName);
@@ -462,11 +455,6 @@ export default function Home() {
     setModalDates([...modalDates, '']);
   };
 
-  const removeDateField = (index: number) => {
-    if (modalDates.length === 1) return;
-    setModalDates(modalDates.filter((_, i) => i !== index));
-  };
-
   const handleSaveSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
@@ -558,7 +546,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Top-Level Navigation Tabs */}
+        {/* Top Navigation Tabs */}
         <div className="flex flex-wrap justify-between items-center border-b border-slate-200 gap-4">
           <div className="flex">
             <button
@@ -943,10 +931,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: TOURNAMENT SCHEDULE (STANDALONE VIEW) */}
+        {/* TAB 3: TOURNAMENT SCHEDULE (MULTI-SELECT ENABLED) */}
         {activeTab === 'tournaments' && (
           <div className="space-y-8">
-            {/* Tournament Requirements Card */}
             <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-6 rounded-xl shadow space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -965,37 +952,36 @@ export default function Home() {
                 <div className="bg-white/10 p-3 rounded-lg border border-white/20">
                   <span className="font-bold text-amber-300 block mb-1">⚡ Pit Power Policy:</span>
                   <p>
-                    Power will <strong>NOT</strong> be provided directly to your pits. A central event charging station will be available with one outlet per team, but bringing battery power banks for your pit is strongly advised.
+                    Power will <strong>NOT</strong> be provided directly to pits. Central charging stations will be available with one outlet per team, but bringing battery power banks for your pit is strongly advised.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Voting Form */}
             <div className="bg-white p-6 rounded-xl shadow-sm border space-y-6">
               <div className="border-b pb-3">
                 <h3 className="text-lg font-bold text-slate-800">
-                  Select Your Preferred Tournament Schedule Track
+                  Select Your Preferred Tournament Schedule Tracks (Check All That Work)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Submit family availability so coaches can select the best schedule link on October 23rd. Selections are optional—submit what you know now and complete the rest later.
+                  Pick every day or track combination that fits your family's schedule. This reveals the maximum overlap across our 14 families before coach registration opens on October 23rd.
                 </p>
               </div>
 
-              {/* Selection 1: League Tracks (Week 1 + 4 linked) */}
+              {/* Selection 1: Multi-Select Tracks */}
               <div className="space-y-3">
                 <div>
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-bold text-slate-800 block">
-                      1. Selection #1: League Track (Week #1 & Week #4 are Linked)
+                      1. Selection #1: League Track (Check all that work; Week #1 & Week #4 are Linked)
                     </label>
-                    {mySel1 && (
+                    {mySel1.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setMySel1('')}
+                        onClick={() => setMySel1([])}
                         className="text-[11px] text-slate-400 hover:text-red-500"
                       >
-                        Clear Selection #1
+                        Clear Selection #1 ({mySel1.length} selected)
                       </button>
                     )}
                   </div>
@@ -1008,81 +994,80 @@ export default function Home() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-                  {TRACK_OPTIONS.map((track) => (
-                    <label
-                      key={track.id}
-                      onClick={() => setMySel1(track.id)}
-                      className={`border-2 p-3.5 rounded-lg cursor-pointer transition flex flex-col justify-between ${
-                        mySel1 === track.id
-                          ? 'border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="font-bold text-slate-900 text-sm">{track.name}</span>
-                          <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-semibold">
-                            {track.pairBadge}
+                  {TRACK_OPTIONS.map((track) => {
+                    const isChecked = mySel1.includes(track.id);
+                    return (
+                      <label
+                        key={track.id}
+                        onClick={() => setMySel1(toggleArrayOption(mySel1, track.id))}
+                        className={`border-2 p-3.5 rounded-lg cursor-pointer transition flex flex-col justify-between ${
+                          isChecked
+                            ? 'border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500'
+                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="font-bold text-slate-900 text-sm">{track.name}</span>
+                            <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-semibold">
+                              {track.pairBadge}
+                            </span>
+                          </div>
+
+                          <div className="text-xs space-y-1.5 text-slate-700 bg-white/60 p-2 rounded border border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-500">Kickoff:</span>
+                              <span className="font-medium text-slate-800">{track.w1}</span>
+                            </div>
+                            <div className="flex items-center justify-between border-t pt-1">
+                              <span className="font-semibold text-slate-500">Championship:</span>
+                              <span className="font-medium text-slate-800">{track.w4}</span>
+                            </div>
+                          </div>
+
+                          <span className="inline-block mt-2 text-[11px] text-slate-500 italic">
+                            Combo: {track.patternBadge}
                           </span>
                         </div>
 
-                        <div className="text-xs space-y-1.5 text-slate-700 bg-white/60 p-2 rounded border border-slate-100">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-500">Kickoff:</span>
-                            <span className="font-medium text-slate-800">{track.w1}</span>
-                          </div>
-                          <div className="flex items-center justify-between border-t pt-1">
-                            <span className="font-semibold text-slate-500">Championship:</span>
-                            <span className="font-medium text-slate-800">{track.w4}</span>
-                          </div>
+                        <div className="flex items-center justify-between border-t mt-3 pt-2">
+                          <span className="text-xs font-medium text-slate-600">Available</span>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="text-blue-600 h-4 w-4 rounded"
+                          />
                         </div>
-
-                        <span className="inline-block mt-2 text-[11px] text-slate-500 italic">
-                          Combo: {track.patternBadge}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t mt-3 pt-2">
-                        <span className="text-xs font-medium text-slate-600">Select Track</span>
-                        <input
-                          type="radio"
-                          name="sel1"
-                          checked={mySel1 === track.id}
-                          onChange={() => setMySel1(track.id)}
-                          className="text-blue-600 h-4 w-4"
-                        />
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Selection #2 & Selection #3: Intra-League Matches */}
+              {/* Selection #2 & Selection #3: Multi-Select Intra-League Matches */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6">
                 {/* Selection #2 */}
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between items-center">
                       <label className="text-sm font-bold text-slate-800">
-                        2. Selection #2: Week #2 Intra-League Match
+                        2. Selection #2: Week #2 Intra-League Match (Check all that work)
                       </label>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
-                          Optional
-                        </span>
-                        {mySel2 && (
+                        {mySel2.length > 0 && (
                           <button
                             type="button"
-                            onClick={() => setMySel2('')}
+                            onClick={() => setMySel2([])}
                             className="text-[11px] text-slate-400 hover:text-red-500"
                           >
-                            Clear
+                            Clear ({mySel2.length} selected)
                           </button>
                         )}
                       </div>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Choose your family's availability for the December regular match.
+                      Check either or both days if you can participate in the December match.
                     </p>
                   </div>
 
@@ -1100,36 +1085,38 @@ export default function Home() {
                         date: 'December 13, 2026',
                         badge: 'Sunday Match',
                       },
-                    ].map((opt) => (
-                      <label
-                        key={opt.val}
-                        onClick={() => setMySel2(opt.val)}
-                        className={`flex items-center justify-between border-2 p-3.5 rounded-lg cursor-pointer transition ${
-                          mySel2 === opt.val
-                            ? 'border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="sel2"
-                            checked={mySel2 === opt.val}
-                            onChange={() => setMySel2(opt.val)}
-                            className="text-blue-600 h-4 w-4"
-                          />
-                          <div>
-                            <span className="font-bold text-slate-800 text-sm block">
-                              {opt.day}, {opt.date}
-                            </span>
-                            <span className="text-[11px] text-slate-500">Regular Season Match Session</span>
+                    ].map((opt) => {
+                      const isChecked = mySel2.includes(opt.val);
+                      return (
+                        <label
+                          key={opt.val}
+                          onClick={() => setMySel2(toggleArrayOption(mySel2, opt.val))}
+                          className={`flex items-center justify-between border-2 p-3.5 rounded-lg cursor-pointer transition ${
+                            isChecked
+                              ? 'border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500'
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              className="text-blue-600 h-4 w-4 rounded"
+                            />
+                            <div>
+                              <span className="font-bold text-slate-800 text-sm block">
+                                {opt.day}, {opt.date}
+                              </span>
+                              <span className="text-[11px] text-slate-500">Regular Season Match Session</span>
+                            </div>
                           </div>
-                        </div>
-                        <span className="text-[10px] font-semibold bg-white border px-2 py-0.5 rounded text-slate-600">
-                          {opt.badge}
-                        </span>
-                      </label>
-                    ))}
+                          <span className="text-[10px] font-semibold bg-white border px-2 py-0.5 rounded text-slate-600">
+                            {opt.badge}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1138,298 +1125,23 @@ export default function Home() {
                   <div>
                     <div className="flex justify-between items-center">
                       <label className="text-sm font-bold text-slate-800">
-                        3. Selection #3: Week #3 Intra-League Match
+                        3. Selection #3: Week #3 Intra-League Match (Check all that work)
                       </label>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
-                          Optional
-                        </span>
-                        {mySel3 && (
+                        {mySel3.length > 0 && (
                           <button
                             type="button"
-                            onClick={() => setMySel3('')}
+                            onClick={() => setMySel3([])}
                             className="text-[11px] text-slate-400 hover:text-red-500"
                           >
-                            Clear
+                            Clear ({mySel3.length} selected)
                           </button>
                         )}
                       </div>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Choose your family's availability for the January regular match.
+                      Check either or both days if you can participate in the January match.
                     </p>
                   </div>
 
-                  <div className="space-y-2.5">
-                    {[
-                      {
-                        val: '2027-01-23',
-                        day: 'Saturday',
-                        date: 'January 23, 2027',
-                        badge: 'Saturday Match',
-                      },
-                      {
-                        val: '2027-01-24',
-                        day: 'Sunday',
-                        date: 'January 24, 2027',
-                        badge: 'Sunday Match',
-                      },
-                    ].map((opt) => (
-                      <label
-                        key={opt.val}
-                        onClick={() => setMySel3(opt.val)}
-                        className={`flex items-center justify-between border-2 p-3.5 rounded-lg cursor-pointer transition ${
-                          mySel3 === opt.val
-                            ? 'border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="sel3"
-                            checked={mySel3 === opt.val}
-                            onChange={() => setMySel3(opt.val)}
-                            className="text-blue-600 h-4 w-4"
-                          />
-                          <div>
-                            <span className="font-bold text-slate-800 text-sm block">
-                              {opt.day}, {opt.date}
-                            </span>
-                            <span className="text-[11px] text-slate-500">Regular Season Match Session</span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-semibold bg-white border px-2 py-0.5 rounded text-slate-600">
-                          {opt.badge}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Volunteer Note */}
-              <div className="border-t pt-4 space-y-2">
-                <label className="text-sm font-bold text-slate-800 block">
-                  4. Event Volunteer Sign-up (1–2 Volunteers Needed Per Team)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Parent is willing to volunteer"
-                  value={myVolunteer}
-                  onChange={(e) => setMyVolunteer(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                {tourneySaved && <span className="text-sm text-green-600 font-semibold">✓ Schedule choice recorded!</span>}
-                <button
-                  onClick={handleSaveTournamentVote}
-                  disabled={!isNameVerified}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold px-5 py-2 rounded-md transition text-sm"
-                >
-                  Submit Tournament Availability
-                </button>
-              </div>
-            </div>
-
-            {/* Voting Results Breakdown */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
-              <div className="flex justify-between items-center border-b pb-2">
-                <h3 className="text-lg font-bold text-slate-800">
-                  📊 Team Preference Consensus ({tournamentVotes.length}/14 Responded)
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Selection 1 Summary */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">League Track</h4>
-                  {TRACK_OPTIONS.map((t) => {
-                    const voters = tournamentVotes.filter((v) => v.selection_1 === t.id).map((v) => v.user_name);
-                    return (
-                      <div key={t.id} className="border p-2.5 rounded bg-slate-50 text-xs space-y-1">
-                        <div className="flex justify-between font-bold">
-                          <span>{t.name}</span>
-                          <span className="text-blue-700">{voters.length} votes</span>
-                        </div>
-                        <p className="text-slate-500 text-[11px] truncate">
-                          {voters.length > 0 ? voters.join(', ') : 'No votes yet'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Selection 2 Summary */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Week #2 Match</h4>
-                  {[
-                    { id: '2026-12-12', label: 'Sat 12/12/2026' },
-                    { id: '2026-12-13', label: 'Sun 12/13/2026' },
-                  ].map((d) => {
-                    const voters = tournamentVotes.filter((v) => v.selection_2 === d.id).map((v) => v.user_name);
-                    return (
-                      <div key={d.id} className="border p-2.5 rounded bg-slate-50 text-xs space-y-1">
-                        <div className="flex justify-between font-bold">
-                          <span>{d.label}</span>
-                          <span className="text-blue-700">{voters.length} votes</span>
-                        </div>
-                        <p className="text-slate-500 text-[11px] truncate">
-                          {voters.length > 0 ? voters.join(', ') : 'No votes yet'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Selection 3 Summary */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Week #3 Match</h4>
-                  {[
-                    { id: '2027-01-23', label: 'Sat 1/23/2027' },
-                    { id: '2027-01-24', label: 'Sun 1/24/2027' },
-                  ].map((d) => {
-                    const voters = tournamentVotes.filter((v) => v.selection_3 === d.id).map((v) => v.user_name);
-                    return (
-                      <div key={d.id} className="border p-2.5 rounded bg-slate-50 text-xs space-y-1">
-                        <div className="flex justify-between font-bold">
-                          <span>{d.label}</span>
-                          <span className="text-blue-700">{voters.length} votes</span>
-                        </div>
-                        <p className="text-slate-500 text-[11px] truncate">
-                          {voters.length > 0 ? voters.join(', ') : 'No votes yet'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Volunteer Roster */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Volunteer Offers</h4>
-                <div className="space-y-1 text-xs">
-                  {tournamentVotes.filter((v) => v.volunteer_note).length === 0 ? (
-                    <p className="text-slate-400 italic">No volunteer notes submitted yet.</p>
-                  ) : (
-                    tournamentVotes
-                      .filter((v) => v.volunteer_note)
-                      .map((v) => (
-                        <div key={v.id} className="flex gap-2">
-                          <span className="font-semibold text-slate-700">{v.user_name}:</span>
-                          <span className="text-slate-600">{v.volunteer_note}</span>
-                        </div>
-                      ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Admin Session Edit/Add Modal */}
-      {showModal && isAdmin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-bold text-slate-800">
-                {editingSessionId ? 'Edit Meeting Session' : 'Add New Meeting Session'}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">
-                ×
-              </button>
-            </div>
-            <form onSubmit={handleSaveSession} className="space-y-4 text-sm">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Session Title</label>
-                <input
-                  type="text"
-                  value={modalLabel}
-                  onChange={(e) => setModalLabel(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-md"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block font-semibold text-slate-700">Dates</label>
-                {modalDates.map((dVal, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <input
-                      type="date"
-                      value={dVal}
-                      onChange={(e) => {
-                        const updated = [...modalDates];
-                        updated[idx] = e.target.value;
-                        setModalDates(updated);
-                      }}
-                      className="border px-3 py-2 rounded-md w-full"
-                      required
-                    />
-                    {modalDates.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeDateField(idx)}
-                        className="text-red-500 hover:text-red-700 font-bold px-2 py-1"
-                        title="Remove date"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button type="button" onClick={addDateField} className="text-xs text-blue-600 font-semibold inline-flex items-center gap-1">
-                  ➕ Add Another Date
-                </button>
-              </div>
-
-              {/* Time Range Selectors */}
-              <div className="grid grid-cols-2 gap-4 border-t pt-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Start Time</label>
-                  <select
-                    value={modalStartHour}
-                    onChange={(e) => setModalStartHour(Number(e.target.value))}
-                    className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
-                  >
-                    {Array.from({ length: 24 }).map((_, i) => (
-                      <option key={i} value={i}>
-                        {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">End Time</label>
-                  <select
-                    value={modalEndHour}
-                    onChange={(e) => setModalEndHour(Number(e.target.value))}
-                    className="w-full border px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500"
-                  >
-                    {Array.from({ length: 24 }).map((_, i) => (
-                      <option key={i} value={i}>
-                        {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100 font-medium">
-                  Cancel
-                </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium">
-                  {editingSessionId ? 'Save Changes' : 'Create Session'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </main>
-  );
-}
+                  <div className="space-y
