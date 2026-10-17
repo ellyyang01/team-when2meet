@@ -602,7 +602,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)</label>
+                    <label className="text-sm font-bold">2. Week #2 Intra-league Match (Check all that work)</label>
                     {sel2.length > 0 && <button onClick={() => setSel2([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -620,7 +620,7 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)</label>
+                    <label className="text-sm font-bold">3. Week #3 Intra-league Match (Check all that work)</label>
                     {sel3.length > 0 && <button onClick={() => setSel3([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
