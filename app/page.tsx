@@ -722,7 +722,7 @@ export default function Home() {
                 <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Parent available to referee or queue fields..."
+                  placeholder="e.g. Parent available to volunteer ..."
                   value={volNote}
                   onChange={(e) => setVolNote(e.target.value)}
                   className="w-full border px-3 py-1.5 rounded text-sm focus:ring-2 focus:ring-blue-500"
