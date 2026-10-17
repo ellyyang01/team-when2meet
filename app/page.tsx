@@ -1215,7 +1215,7 @@ export default function Home() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Parent willing to volunteer as field queueing, referee, or scorekeeper..."
+                  placeholder="e.g. Parent is willing to volunteer"
                   value={myVolunteer}
                   onChange={(e) => setMyVolunteer(e.target.value)}
                   className="w-full border px-3 py-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
