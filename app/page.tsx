@@ -541,12 +541,12 @@ export default function Home() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">
                 <ul className="list-disc list-inside space-y-1">
-                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament[cite: 5].</li>
-                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables[cite: 5].</li>
+                  <li><strong>Volunteers:</strong> Teams provide 1–2 volunteers at each tournament.</li>
+                  <li><strong>Pit Area:</strong> Outdoor 10' x 10' area; bring pop-up tent and pit tables.</li>
                 </ul>
                 <div className="bg-white/10 p-2.5 rounded border border-white/20">
                   <span className="text-amber-300 font-bold block mb-0.5">⚡ Power Policy:</span>
-                  No pit power provided; central station has 1 outlet/team; bring battery packs[cite: 5].
+                  No pit power provided; central station has 1 outlet/team; bring battery packs.
                 </div>
               </div>
             </div>
@@ -561,13 +561,13 @@ export default function Home() {
               {/* Selection #1 */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold">1. Selection #1: League Track (Kickoff & Championship are Linked)[cite: 5]</label>
+                  <label className="text-sm font-bold">1. Selection #1: League Track (Kickoff & Championship are Linked)</label>
                   {sel1.length > 0 && (
                     <button onClick={() => setSel1([])} className="text-xs text-slate-400 hover:text-red-500">Clear ({sel1.length})</button>
                   )}
                 </div>
                 <div className="bg-amber-50 border border-amber-300 rounded p-2 text-xs text-amber-900">
-                  ⚠️ Selection #1 binds your Week #1 and Week #4 League Championship match dates together[cite: 5].
+                  ⚠️ Selection #1 binds your Week #1 and Week #4 League Championship match dates together.
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {TRACKS.map((t) => {
@@ -602,7 +602,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)[cite: 5]</label>
+                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)</label>
                     {sel2.length > 0 && <button onClick={() => setSel2([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -620,7 +620,7 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)[cite: 5]</label>
+                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)</label>
                     {sel3.length > 0 && <button onClick={() => setSel3([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -639,7 +639,7 @@ export default function Home() {
 
               {/* Volunteer Note */}
               <div className="border-t pt-3 space-y-1.5">
-                <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)[cite: 5]</label>
+                <label className="text-sm font-bold">4. Volunteer Sign-up (1–2 Volunteers per event)</label>
                 <input
                   type="text"
                   placeholder="e.g. Parent available to referee or queue fields..."
