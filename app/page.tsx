@@ -38,10 +38,34 @@ interface TournamentVote {
 const POLL_ID = '00000000-0000-0000-0000-000000000001';
 
 const TRACKS = [
-  { id: 'Euclid', name: 'Euclid Track', w1: 'Sat 11/21/2026', w4: 'Sat 2/20/2027', badge: 'All Saturdays' },
-  { id: 'Gauss', name: 'Gauss Track', w1: 'Sun 11/22/2026', w4: 'Sat 2/20/2027', badge: 'Sun then Sat' },
-  { id: 'Turing', name: 'Turing Track', w1: 'Sat 11/21/2026', w4: 'Sun 2/21/2027', badge: 'Sat then Sun' },
-  { id: 'Descartes', name: 'Descartes Track', w1: 'Sun 11/22/2026', w4: 'Sun 2/21/2027', badge: 'All Sundays' },
+  {
+    id: 'Euclid',
+    name: 'Euclid Track',
+    pattern: 'All Saturdays',
+    w1: 'Sat 11/21/2026',
+    w4: 'Sat 2/20/2027',
+  },
+  {
+    id: 'Gauss',
+    name: 'Gauss Track',
+    pattern: 'Sun then Sat',
+    w1: 'Sun 11/22/2026',
+    w4: 'Sat 2/20/2027',
+  },
+  {
+    id: 'Turing',
+    name: 'Turing Track',
+    pattern: 'Sat then Sun',
+    w1: 'Sat 11/21/2026',
+    w4: 'Sun 2/21/2027',
+  },
+  {
+    id: 'Descartes',
+    name: 'Descartes Track',
+    pattern: 'All Sundays',
+    w1: 'Sun 11/22/2026',
+    w4: 'Sun 2/21/2027',
+  },
 ];
 
 const W2_OPTS = [
@@ -531,7 +555,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: TOURNAMENT SCHEDULE (MULTI-SELECT) */}
+        {/* TAB 3: TOURNAMENT SCHEDULE (AVAILABILITY INSIDE EACH TRACK) */}
         {tab === 'tournaments' && (
           <div className="space-y-6">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 rounded-xl space-y-3">
@@ -555,44 +579,100 @@ export default function Home() {
             <div className="bg-white p-5 rounded-lg border shadow-sm space-y-5">
               <div className="border-b pb-2">
                 <h3 className="font-bold text-base">Select Tournament Availability (Check All That Work)</h3>
-                <p className="text-xs text-slate-500">Pick every option that fits your family's schedule to identify team consensus.</p>
+                <p className="text-xs text-slate-500">
+                  Select your family availability directly inside each track card for Kickoff (W1) and League Championship (W4).
+                </p>
               </div>
 
-              {/* Selection #1 */}
-              <div className="space-y-2">
+              {/* Selection 1: Availability in Each Track Card */}
+              <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold">1. Selection #1: League Track (Kickoff & Championship are Linked)</label>
+                  <label className="text-sm font-bold">1. Selection #1: League Tracks & Match Day Availability</label>
                   {sel1.length > 0 && (
-                    <button onClick={() => setSel1([])} className="text-xs text-slate-400 hover:text-red-500">Clear ({sel1.length})</button>
+                    <button onClick={() => setSel1([])} className="text-xs text-slate-400 hover:text-red-500">
+                      Clear Selection #1 ({sel1.length})
+                    </button>
                   )}
                 </div>
-                <div className="bg-amber-50 border border-amber-300 rounded p-2 text-xs text-amber-900">
-                  ⚠️ Selection #1 binds your Week #1 and Week #4 League Championship match dates together.
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {TRACKS.map((t) => {
-                    const active = sel1.includes(t.id);
+                    const tagW1 = `${t.id}:w1`;
+                    const tagW4 = `${t.id}:w4`;
+                    const canW1 = sel1.includes(tagW1);
+                    const canW4 = sel1.includes(tagW4);
+                    const canBoth = canW1 && canW4;
+
+                    const toggleBoth = () => {
+                      if (canBoth) {
+                        setSel1(sel1.filter((x) => x !== tagW1 && x !== tagW4));
+                      } else {
+                        const next = new Set([...sel1, tagW1, tagW4]);
+                        setSel1(Array.from(next));
+                      }
+                    };
+
                     return (
-                      <label
+                      <div
                         key={t.id}
-                        onClick={() => setSel1(toggle(sel1, t.id))}
-                        className={`border-2 p-3 rounded-lg cursor-pointer transition flex flex-col justify-between ${active ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                        className={`border-2 rounded-xl p-3.5 space-y-3 transition flex flex-col justify-between ${
+                          canBoth
+                            ? 'border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500'
+                            : canW1 || canW4
+                            ? 'border-indigo-300 bg-indigo-50/30'
+                            : 'border-slate-200 bg-white'
+                        }`}
                       >
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-start">
-                            <span className="font-bold text-sm">{t.name}</span>
-                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">{t.badge}</span>
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-bold text-sm text-slate-900">{t.name}</span>
+                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">
+                              {t.pattern}
+                            </span>
                           </div>
-                          <div className="text-xs text-slate-600 bg-white/70 p-2 rounded border border-slate-100 space-y-0.5">
-                            <div><strong className="text-slate-500">W1:</strong> {t.w1}</div>
-                            <div><strong className="text-slate-500">W4:</strong> {t.w4}</div>
-                          </div>
+                          <span className="text-[11px] text-slate-500 block">Check days that work for your family:</span>
                         </div>
-                        <div className="flex justify-between items-center border-t mt-2.5 pt-1.5">
-                          <span className="text-xs text-slate-500 font-medium">Available</span>
-                          <input type="checkbox" checked={active} onChange={() => {}} className="h-4 w-4 text-blue-600 rounded" />
+
+                        <div className="space-y-2 bg-white/80 p-2.5 rounded-lg border border-slate-200/80 text-xs">
+                          <label
+                            onClick={() => setSel1(toggle(sel1, tagW1))}
+                            className={`flex items-center justify-between p-2 rounded cursor-pointer border transition ${
+                              canW1 ? 'border-emerald-500 bg-emerald-50 text-emerald-950 font-semibold' : 'border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="pr-1">
+                              <span className="block font-bold text-[11px] text-slate-500 uppercase">Week #1 Kickoff</span>
+                              <span className="text-xs">{t.w1}</span>
+                            </div>
+                            <input type="checkbox" checked={canW1} onChange={() => {}} className="h-4 w-4 text-emerald-600 rounded" />
+                          </label>
+
+                          <label
+                            onClick={() => setSel1(toggle(sel1, tagW4))}
+                            className={`flex items-center justify-between p-2 rounded cursor-pointer border transition ${
+                              canW4 ? 'border-emerald-500 bg-emerald-50 text-emerald-950 font-semibold' : 'border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="pr-1">
+                              <span className="block font-bold text-[11px] text-slate-500 uppercase">Week #4 Championship</span>
+                              <span className="text-xs">{t.w4}</span>
+                            </div>
+                            <input type="checkbox" checked={canW4} onChange={() => {}} className="h-4 w-4 text-emerald-600 rounded" />
+                          </label>
                         </div>
-                      </label>
+
+                        <button
+                          type="button"
+                          onClick={toggleBoth}
+                          className={`w-full py-1.5 px-2 rounded text-xs font-semibold border transition ${
+                            canBoth
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300'
+                          }`}
+                        >
+                          {canBoth ? '✓ Free Both Days' : '+ Select Both Days'}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -602,7 +682,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t pt-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">2. Week #2 Intra-league Match (Check all that work)</label>
+                    <label className="text-sm font-bold">2. Week #2 Match (Check all that work)</label>
                     {sel2.length > 0 && <button onClick={() => setSel2([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -620,7 +700,7 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold">3. Week #3 Intra-league Match (Check all that work)</label>
+                    <label className="text-sm font-bold">3. Week #3 Match (Check all that work)</label>
                     {sel3.length > 0 && <button onClick={() => setSel3([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>}
                   </div>
                   <div className="space-y-2">
@@ -658,21 +738,67 @@ export default function Home() {
             </div>
 
             {/* Results Breakdown */}
-            <div className="bg-white p-5 rounded-lg border shadow-sm space-y-3">
-              <h3 className="font-bold text-sm border-b pb-2">📊 Consensus Overlap ({votes.length}/14 Responded)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Selection #1 Tracks</span>
-                  {TRACKS.map((t) => {
-                    const matched = votes.filter((v) => Array.isArray(v.selection_1) && v.selection_1.includes(t.id)).map((v) => v.user_name);
-                    return (
-                      <div key={t.id} className="border p-2 rounded bg-slate-50 text-xs">
-                        <div className="flex justify-between font-bold"><span>{t.name}</span><span className="text-blue-700">{matched.length} free</span></div>
-                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+            <div className="bg-white p-5 rounded-lg border shadow-sm space-y-4">
+              <h3 className="font-bold text-sm border-b pb-2">📊 Track Attendance Consensus ({votes.length}/14 Responded)</h3>
+
+              {/* Track-by-Track Consensus Table with Detailed Names for Each Day */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {TRACKS.map((t) => {
+                  const tagW1 = `${t.id}:w1`;
+                  const tagW4 = `${t.id}:w4`;
+
+                  const canW1Voters = votes.filter((v) => Array.isArray(v.selection_1) && (v.selection_1.includes(tagW1) || v.selection_1.includes(t.id))).map((v) => v.user_name);
+                  const canW4Voters = votes.filter((v) => Array.isArray(v.selection_1) && (v.selection_1.includes(tagW4) || v.selection_1.includes(t.id))).map((v) => v.user_name);
+                  const canBothVoters = votes.filter((v) => Array.isArray(v.selection_1) && (v.selection_1.includes(t.id) || (v.selection_1.includes(tagW1) && v.selection_1.includes(tagW4)))).map((v) => v.user_name);
+
+                  return (
+                    <div key={t.id} className="border p-3 rounded-lg bg-slate-50 text-xs space-y-2.5 flex flex-col justify-between">
+                      <div className="flex justify-between items-center border-b pb-1.5">
+                        <span className="font-bold text-slate-800 text-sm">{t.name}</span>
+                        <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">{t.pattern}</span>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      <div className="space-y-2">
+                        {/* Kickoff Day Names */}
+                        <div className="bg-white p-2 rounded border border-slate-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-700">Kickoff ({t.w1.split(' ')[0]})</span>
+                            <span className="text-emerald-700 font-bold">{canW1Voters.length} free</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                            {canW1Voters.length > 0 ? canW1Voters.join(', ') : <span className="text-slate-300 italic">None</span>}
+                          </div>
+                        </div>
+
+                        {/* Championship Day Names */}
+                        <div className="bg-white p-2 rounded border border-slate-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-700">Champs ({t.w4.split(' ')[0]})</span>
+                            <span className="text-emerald-700 font-bold">{canW4Voters.length} free</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                            {canW4Voters.length > 0 ? canW4Voters.join(', ') : <span className="text-slate-300 italic">None</span>}
+                          </div>
+                        </div>
+
+                        {/* Both Days Overlap */}
+                        <div className="bg-blue-50/70 p-2 rounded border border-blue-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-blue-950">Free Both Days</span>
+                            <span className="text-blue-700 font-bold">{canBothVoters.length} full overlap</span>
+                          </div>
+                          <div className="text-[11px] text-blue-900 mt-0.5 leading-snug font-medium">
+                            {canBothVoters.length > 0 ? canBothVoters.join(', ') : <span className="text-blue-300 italic">No full overlap yet</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Selection 2 & 3 Breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-3">
                 <div className="space-y-1.5">
                   <span className="text-xs font-bold text-slate-500 uppercase">Week #2 Match</span>
                   {W2_OPTS.map((o) => {
@@ -680,7 +806,7 @@ export default function Home() {
                     return (
                       <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
                         <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
-                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{matched.join(', ') || 'None'}</p>
                       </div>
                     );
                   })}
@@ -692,12 +818,13 @@ export default function Home() {
                     return (
                       <div key={o.id} className="border p-2 rounded bg-slate-50 text-xs">
                         <div className="flex justify-between font-bold"><span>{o.label}</span><span className="text-blue-700">{matched.length} free</span></div>
-                        <p className="text-[11px] text-slate-400 truncate">{matched.join(', ') || 'None'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{matched.join(', ') || 'None'}</p>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
               <div className="border-t pt-2 space-y-1 text-xs">
                 <span className="font-bold text-slate-500 uppercase">Volunteers:</span>
                 {votes.filter((v) => v.volunteer_note).map((v) => (
